@@ -1,279 +1,684 @@
 <template>
-  <div class="min-h-screen bg-slate-50 flex flex-col md:flex-row font-sans text-slate-900">
-    <!-- Sidebar -->
-    <!-- Mobile backdrop -->
-    <div v-if="sidebarOpen" @click="closeSidebar" class="fixed inset-0 bg-black bg-opacity-40 z-30 md:hidden"></div>
+  <div class="student-root">
+    <div v-if="sidebarOpen" class="sidebar-overlay" @click="toggleSidebar"></div>
 
-    <aside :class="[
-      sidebarOpen ? 'translate-x-0' : '-translate-x-full',
-      'fixed inset-y-0 left-0 z-40 w-64 bg-emerald-900 text-white flex flex-col p-4 md:static md:translate-x-0 md:w-64 transition-transform duration-200'
-    ]">
-      <!-- Gradient footer effect -->
-      <div class="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-emerald-700 to-transparent pointer-events-none"></div>
-      
-      <div class="flex flex-col items-center mb-8 md:mb-10 z-10">
-        <div class="w-16 h-16 md:w-20 md:h-20 bg-white rounded-full flex items-center justify-center mb-3 md:mb-4 border-4 border-emerald-800 p-1 overflow-hidden">
-          <img :src="colegioLogo" alt="Colegio de Montalban" class="w-full h-full object-contain" />
-        </div>
-        <h1 class="text-center font-bold text-lg leading-tight">
-          <span class="block text-white">COLEGIO DE</span>
-          <span class="block text-yellow-300">MONTALBAN</span>
-        </h1>
+    <aside class="student-sidebar" :class="{ open: sidebarOpen }">
+      <div class="seal-wrap">
+        <img :src="colegioLogo" alt="Colegio de Montalban" />
       </div>
 
-      <nav class="flex-grow space-y-2 z-10">
-        <button class="w-full flex items-center gap-3 bg-emerald-800 p-3 rounded-xl font-semibold shadow-inner text-sm md:text-base">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
-          Dashboard
+      <div class="sidebar-rule"></div>
+
+      <nav class="student-nav" aria-label="Student navigation">
+        <button class="nav-item active" type="button" aria-label="Dashboard">
+          <span class="active-mark"></span>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="5" y="5" width="5" height="5" />
+            <rect x="14" y="5" width="5" height="5" />
+            <rect x="5" y="14" width="5" height="5" />
+            <rect x="14" y="14" width="5" height="5" />
+          </svg>
         </button>
-        <button class="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-emerald-800 transition text-sm md:text-base">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
-          My Subjects
+        <button class="nav-item" type="button" aria-label="My subjects">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+          </svg>
         </button>
       </nav>
 
-      <div class="mt-auto border-t border-emerald-800 pt-4 md:pt-6 z-10">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-10 h-10 bg-emerald-700 rounded-full flex items-center justify-center font-bold text-emerald-100">JA</div>
-          <div>
-            <p class="font-bold text-sm md:text-base">Junas Arroyo</p>
-            <p class="text-[10px] md:text-xs text-emerald-300">STUDENT</p>
-          </div>
+      <div class="student-sidebar-footer">
+        <div class="sidebar-rule footer-rule"></div>
+        <div class="student-profile">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21a8 8 0 0 1 16 0" />
+          </svg>
+          <span>STUDENT</span>
         </div>
-        <button @click="emitSignOut" class="flex items-center gap-2 text-xs md:text-sm text-emerald-300 hover:text-white">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path></svg>
-          Sign out
+        <button class="logout-button" type="button" aria-label="Sign out" @click="signOut">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <path d="m16 17 5-5-5-5" />
+            <path d="M21 12H9" />
+          </svg>
         </button>
       </div>
     </aside>
 
-    <!-- Main Content -->
-    <main class="flex-grow p-4 md:p-8">
-      <!-- Mobile top bar -->
-      <div class="md:hidden flex items-center justify-between bg-white border-b">
-        <button @click="toggleSidebar" class="p-3 focus:outline-none">
-          <svg class="w-6 h-6 text-emerald-900" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
-        </button>
-        <div class="py-3 font-bold text-emerald-900">COLEGIO DE MONTALBAN</div>
-        <div class="w-10"></div>
-      </div>
-      <header class="mb-8">
-        <h2 class="text-xl md:text-2xl font-bold text-slate-800">GRADES</h2>
-        <p class="text-slate-500 text-sm md:text-sm">View your officially published academic grades.</p>
-      </header>
-
-      <!-- Stat Cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6 md:mb-8">
-        <div class="bg-emerald-900 text-white p-4 md:p-6 rounded-2xl shadow-lg">
-          <p class="text-[10px] opacity-80 uppercase tracking-wide">General Weighted Average</p>
-          <p class="text-2xl md:text-3xl font-bold mt-1">1.59</p>
-        </div>
-        <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-emerald-50 text-emerald-700 rounded-xl"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg></div>
-          <div>
-            <p class="text-[10px] text-slate-500 uppercase">Enrolled Subjects</p>
-            <p class="text-lg md:text-xl font-bold">8</p>
-          </div>
-        </div>
-        <div class="bg-white p-4 md:p-6 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
-          <div class="p-3 bg-emerald-50 text-emerald-700 rounded-xl"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></div>
-          <div>
-            <p class="text-[10px] text-slate-500 uppercase">Total Units</p>
-            <p class="text-lg md:text-xl font-bold">24</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Published Grades Table -->
-      <div class="bg-white rounded-2xl border border-slate-100 shadow-sm">
-        <div class="p-6 border-b flex justify-between items-center">
-          <h3 class="font-bold text-md text-slate-800">PUBLISHED GRADES</h3>
-          <select v-model="selectedSemester" class="border border-slate-200 rounded-lg p-2 text-sm bg-slate-50 text-slate-700 focus:ring-2 focus:ring-emerald-500">
-            <option value="1">1st Semester 2025-2026</option>
-            <option value="2">2nd Semester 2025-2026</option>
-          </select>
-        </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead class="bg-slate-50 text-slate-500 text-[10px] uppercase tracking-wider font-bold">
-              <tr>
-                <th class="p-4 text-left">Subject Code</th>
-                <th class="p-4 text-left">Description</th>
-                <th class="p-4 text-left">Professor</th>
-                <th class="p-4 text-center">Midterm</th>
-                <th class="p-4 text-center">Finals</th>
-                <th class="p-4 text-center">Average</th>
-                <th class="p-4 text-center">Grade</th>
-                <th class="p-4 text-center">Remarks</th>
-                <th class="p-4 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody class="divide-y divide-slate-100">
-              <tr v-for="sub in subjects" :key="sub.code" class="hover:bg-slate-50 transition">
-                <td class="p-4 font-bold text-slate-900">{{ sub.code }}</td>
-                <td class="p-4 text-slate-600">{{ sub.desc }}</td>
-                <td class="p-4 text-slate-600">{{ sub.prof }}</td>
-                <td class="p-4 text-center text-slate-700">{{ sub.mid }}</td>
-                <td class="p-4 text-center text-slate-700">{{ sub.fin }}</td>
-                <td class="p-4 text-center font-bold text-emerald-800">{{ sub.avg }}</td>
-                <td class="p-4 text-center font-bold text-slate-900">{{ sub.grade }}</td>
-                <td class="p-4 text-center">
-                  <span class="px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-[10px] font-bold border border-emerald-100">{{ sub.rem }}</span>
-                </td>
-                <!-- Message Icon per row -->
-                <td class="p-4 text-center">
-                  <button
-                    @click="openChat(sub)"
-                    title="Message professor about this subject"
-                    class="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-emerald-50 transition"
-                  >
-                    <svg width="22" height="22" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M21 12c0 4.418-4.03 8-9 8a9.77 9.77 0 01-4-.84L3 20l1.09-3.27C3.4 15.5 3 13.8 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </main>
-
-    <!-- Chat Box -->
-    <div
-      v-if="activeChatSubject"
-      style="position:fixed; bottom:28px; right:28px; z-index:9999; width:320px; background:#fff; border-radius:16px; box-shadow:0 8px 32px rgba(0,0,0,0.18); display:flex; flex-direction:column; overflow:hidden; border:1px solid #d1fae5;"
-    >
-      <!-- Chat Header -->
-      <div style="background:#059669; padding:14px 16px; display:flex; align-items:center; justify-content:space-between;">
-        <div style="display:flex; flex-direction:column;">
-          <span style="color:white; font-weight:700; font-size:14px;">{{ activeChatSubject.prof }}</span>
-          <span style="color:#d1fae5; font-size:11px;">{{ activeChatSubject.code }} — {{ activeChatSubject.desc }}</span>
-        </div>
-        <button @click="activeChatSubject = null" style="background:none; border:none; cursor:pointer; color:white; font-size:20px; line-height:1; padding:0;">&#x2715;</button>
-      </div>
-
-      <!-- Messages Area -->
-      <div
-        ref="chatMessagesRef"
-        style="flex:1; min-height:200px; max-height:260px; overflow-y:auto; padding:14px; background:#f8fafb; display:flex; flex-direction:column; gap:8px;"
-      >
-        <div style="text-align:center; color:#6b7280; font-size:12px; margin-top:8px;">
-          Send a complaint or concern to <strong>{{ activeChatSubject.prof }}</strong> about your grade in <strong>{{ activeChatSubject.desc }}</strong>.
-        </div>
-        <div
-          v-for="(msg, idx) in chatMessages[activeChatSubject.code] || []"
-          :key="idx"
-          :style="{
-            alignSelf: 'flex-end',
-            background: '#059669',
-            color: 'white',
-            borderRadius: '12px',
-            padding: '8px 12px',
-            maxWidth: '85%',
-            fontSize: '13px',
-            wordBreak: 'break-word'
-          }"
-        >{{ msg }}</div>
-      </div>
-
-      <!-- Input Bar -->
-      <div style="display:flex; align-items:center; gap:6px; background:#d1fae5; padding:8px 10px; flex-wrap:nowrap; overflow:hidden;">
-        <!-- Plus -->
-        <button title="Add" style="background:none; border:none; cursor:pointer; color:#059669; display:flex; align-items:center; justify-content:center; padding:2px;">
-          <svg width="20" height="20" fill="none" stroke="#059669" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14M5 12h14"/></svg>
-        </button>
-        <!-- Mic -->
-        <button title="Voice" style="background:none; border:none; cursor:pointer; color:#059669; display:flex; align-items:center; justify-content:center; padding:2px;">
-          <svg width="20" height="20" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path stroke-linecap="round" stroke-linejoin="round" d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
-        </button>
-        <!-- Image -->
-        <button title="Image" style="background:none; border:none; cursor:pointer; color:#059669; display:flex; align-items:center; justify-content:center; padding:2px;">
-          <svg width="20" height="20" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path stroke-linecap="round" stroke-linejoin="round" d="M3 15l5-5 4 4 3-3 6 6"/><circle cx="8.5" cy="8.5" r="1.5" fill="#059669" stroke="none"/></svg>
-        </button>
-        <!-- Text Input -->
-        <input
-          v-model="chatInput"
-          @keyup.enter="sendMessage"
-          type="text"
-          placeholder="Message"
-          style="flex:1; min-width:0; border:none; border-radius:20px; padding:7px 12px; font-size:13px; outline:none; background:#fff; color:#1f2937;"
-        />
-        <!-- Emoji -->
-        <button title="Emoji" style="background:none; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:2px;">
-          <svg width="20" height="20" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path stroke-linecap="round" d="M8 14s1.5 2 4 2 4-2 4-2"/><line x1="9" y1="9" x2="9.01" y2="9" stroke-linecap="round" stroke-width="3"/><line x1="15" y1="9" x2="15.01" y2="9" stroke-linecap="round" stroke-width="3"/></svg>
-        </button>
-        <!-- Send -->
-        <button
-          @click="sendMessage"
-          title="Send"
-          style="background:#059669; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; width:34px; height:34px; border-radius:50%; flex-shrink:0;"
-        >
-          <svg width="16" height="16" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/>
+    <main class="student-page">
+      <header class="student-header">
+        <button class="hamburger" type="button" aria-label="Open menu" @click="toggleSidebar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
-      </div>
-    </div>
+        <h1>GRADES</h1>
+      </header>
 
+      <section class="grades-body">
+        <div class="intro-row">
+          <div>
+            <h2>My Grades</h2>
+            <p>View your officially published academic grades.</p>
+          </div>
+        </div>
+
+        <div class="summary-cards">
+          <article class="gwa-card">
+            <div>
+              <p>General Weighted Average</p>
+              <strong>{{ gwa }}</strong>
+            </div>
+            <svg viewBox="0 0 80 64" aria-hidden="true">
+              <path d="M16 44 32 17l14 24 8-12 11 18" />
+              <path d="M16 48h48" />
+              <circle cx="32" cy="17" r="5" />
+            </svg>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+              </svg>
+            </div>
+            <div>
+              <p>Enrolled Subjects</p>
+              <strong>{{ enrolledSubjects }}</strong>
+            </div>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="4" y="6" width="16" height="12" rx="2" />
+                <path d="M8 10h4M8 14h3M15 11.5h1M15 14.5h1" />
+              </svg>
+            </div>
+            <div>
+              <p>Student Status</p>
+              <strong>{{ studentStatus }}</strong>
+            </div>
+          </article>
+
+          <article class="metric-card">
+            <div class="metric-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 6h10v13H5V6h4Z" />
+                <path d="M9 6V4h6v2M9 12h6M9 16h4" />
+              </svg>
+            </div>
+            <div>
+              <p>Total Units</p>
+              <strong>{{ totalUnits }}</strong>
+            </div>
+          </article>
+        </div>
+
+        <section class="published-panel">
+          <div class="panel-head">
+            <h2>PUBLISHED GRADES</h2>
+            <select v-model="semester" aria-label="Semester">
+              <option>1st Semester 2025-2026</option>
+              <option>2nd Semester 2025-2026</option>
+            </select>
+          </div>
+
+          <div class="table-responsive">
+            <table class="published-table">
+              <thead>
+                <tr>
+                  <th>SUBJECT<br />CODE</th>
+                  <th>DESCRIPTION</th>
+                  <th>PROFESSOR</th>
+                  <th>MIDTERM<br />40%</th>
+                  <th>FINALS<br />60%</th>
+                  <th>FINAL<br />AVERAGE</th>
+                  <th>GRADE<br />POINT</th>
+                  <th>REMARKS</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="p in filteredPublished" :key="p.code">
+                  <td class="code" data-label="SUBJECT CODE">{{ p.code }}</td>
+                  <td data-label="DESCRIPTION">{{ p.description }}</td>
+                  <td data-label="PROFESSOR">{{ p.professor }}</td>
+                  <td data-label="MIDTERM 40%">{{ p.midterm }}</td>
+                  <td data-label="FINALS 60%">{{ p.finals }}</td>
+                  <td data-label="FINAL AVERAGE">{{ p.average }}</td>
+                  <td class="grade-point" data-label="GRADE POINT">{{ p.grade }}</td>
+                  <td data-label="REMARKS">
+                    <span :class="['pill', p.remarks.toLowerCase() === 'passed' ? 'passed' : 'failed']">{{ p.remarks }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue';
-import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png';
+import { ref, computed } from 'vue'
+const sidebarOpen = ref(false)
+function toggleSidebar(){ sidebarOpen.value = !sidebarOpen.value }
+import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
-const emit = defineEmits(['signout']);
+const searchPublished = ref('')
+const semester = ref('1st Semester 2025-2026')
 
-function emitSignOut() {
-  emit('signout');
+const gwa = ref('1.59')
+const enrolledSubjects = ref(8)
+const studentStatus = ref('Regular')
+const totalUnits = ref(24)
+
+const publishedGrades = [
+	{ code: 'ITNETW2', description: 'Networking 2', professor: 'Prof. Junas Arroyo', midterm: 88, finals: 92, average: 90.4, grade: '1.50', remarks: 'PASSED' },
+	{ code: 'ITINFOM', description: 'Information Management', professor: 'Prof. Junas Arroyo', midterm: 95, finals: 93, average: 93.8, grade: '1.25', remarks: 'PASSED' },
+	{ code: 'ITAPPSD', description: 'Application Development and Emerging Technologies', professor: 'Prof. Junas Arroyo', midterm: 85, finals: 87, average: 86.2, grade: '2.00', remarks: 'PASSED' },
+	{ code: 'ITIASE1', description: 'Information Assurance and Security 1', professor: 'Prof. Junas Arroyo', midterm: 90, finals: 90, average: 90.0, grade: '1.50', remarks: 'PASSED' },
+	{ code: 'ITHUMCI', description: 'Human Computer Interaction', professor: 'Prof. Junas Arroyo', midterm: 98, finals: 96, average: 96.8, grade: '1.00', remarks: 'PASSED' },
+  { code: 'ITELEC3', description: 'Integrative Programming and Technologies 2', professor: 'Prof. Junas Arroyo', midterm: 82, finals: 85, average: 83.8, grade: '2.25', remarks: 'PASSED' },
+  { code: 'ITOPSYS', description: 'Operating System', professor: 'Prof. Junas Arroyo', midterm: 89, finals: 91, average: 90.2, grade: '1.50', remarks: 'PASSED' },
+  { code: 'ITADBS', description: 'Advanced Database', professor: 'Prof. Junas Arroyo', midterm: 92, finals: 93, average: 92.6, grade: '1.25', remarks: 'PASSED' },
+]
+
+const filteredPublished = computed(()=> publishedGrades.filter(p =>
+	!searchPublished.value || p.code.toLowerCase().includes(searchPublished.value.toLowerCase()) || p.description.toLowerCase().includes(searchPublished.value.toLowerCase())
+))
+
+function signOut(){
+	window.location.replace(window.location.pathname)
+}
+</script>
+
+<style scoped>
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
-const selectedSemester = ref('1');
-
-const sidebarOpen = ref(false);
-
-function toggleSidebar() {
-  sidebarOpen.value = !sidebarOpen.value;
+.student-root {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #ffffff;
+  color: #0a0a0a;
+  font-family: Arial, Helvetica, sans-serif;
+  text-align: left;
 }
 
-function closeSidebar() {
-  sidebarOpen.value = false;
+.sidebar-overlay {
+  display: none;
 }
 
-const subjects = [
-  { code: 'ITNETW2', desc: 'Networking 2', prof: 'Prof. Junas Arroyo', mid: 88, fin: 92, avg: 90.4, grade: '1.50', rem: 'PASSED' },
-  { code: 'ITINFOM', desc: 'Information Management', prof: 'Prof. Junas Arroyo', mid: 95, fin: 93, avg: 93.8, grade: '1.25', rem: 'PASSED' },
-  { code: 'ITAPPSD', desc: 'App Dev and Emerging Tech', prof: 'Prof. Junas Arroyo', mid: 85, fin: 87, avg: 86.2, grade: '2.00', rem: 'PASSED' },
-  { code: 'ITIASE1', desc: 'Information Assurance', prof: 'Prof. Junas Arroyo', mid: 90, fin: 90, avg: 90.0, grade: '1.50', rem: 'PASSED' },
-  { code: 'ITHUMCI', desc: 'Human Computer Interaction', prof: 'Prof. Junas Arroyo', mid: 98, fin: 96, avg: 96.8, grade: '1.00', rem: 'PASSED' },
-];
+.student-sidebar {
+  width: 70px;
+  flex: 0 0 70px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 31px 0 19px;
+  color: #ffffff;
+  background: linear-gradient(180deg, #104426 0%, #145426 59%, #71a200 100%);
+  z-index: 20;
+}
 
-// Chat feature
-const activeChatSubject = ref(null);
-const chatInput = ref('');
-const chatMessages = ref({});
-const chatMessagesRef = ref(null);
+.seal-wrap img {
+  width: 46px;
+  height: 46px;
+  display: block;
+  object-fit: contain;
+}
 
-function openChat(sub) {
-  activeChatSubject.value = sub;
-  chatInput.value = '';
-  if (!chatMessages.value[sub.code]) {
-    chatMessages.value[sub.code] = [];
+.sidebar-rule {
+  width: 48px;
+  height: 1px;
+  margin: 14px 0 41px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.student-nav {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 17px;
+}
+
+.nav-item,
+.logout-button,
+.hamburger {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.nav-item {
+  position: relative;
+  width: 56px;
+  height: 31px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+}
+
+.nav-item.active {
+  background: rgba(63, 149, 82, 0.72);
+}
+
+.active-mark {
+  position: absolute;
+  left: -1px;
+  width: 5px;
+  height: 28px;
+  border-radius: 0 6px 6px 0;
+  background: #ffda43;
+}
+
+.nav-item svg,
+.logout-button svg,
+.student-profile svg,
+.hamburger svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nav-item.active svg {
+  color: #ffe55d;
+}
+
+.student-sidebar-footer {
+  width: 100%;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.footer-rule {
+  margin: 0 0 13px;
+}
+
+.student-profile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 27px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.student-profile svg {
+  width: 28px;
+  height: 28px;
+  stroke-width: 1.8;
+}
+
+.logout-button svg {
+  width: 22px;
+  height: 22px;
+}
+
+.student-page {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.student-header {
+  height: 50px;
+  flex: 0 0 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 18px;
+  border-bottom: 2px solid #cfcfcf;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  z-index: 3;
+}
+
+.hamburger {
+  display: none;
+  color: #111111;
+  padding: 0;
+}
+
+.hamburger svg {
+  width: 25px;
+  height: 25px;
+}
+
+.student-header h1 {
+  margin: 0;
+  color: #0a0a0a;
+  font-size: 21px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.grades-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 17px 30px;
+  background: #ffffff;
+}
+
+.intro-row h2 {
+  margin: 0;
+  color: #143b25;
+  font-size: 19px;
+  line-height: 1.05;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.intro-row p {
+  margin: 4px 0 13px;
+  color: #4f4f4f;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.summary-cards {
+  display: grid;
+  grid-template-columns: 204px repeat(3, minmax(145px, 1fr));
+  gap: 11px;
+  margin-bottom: 18px;
+}
+
+.gwa-card,
+.metric-card {
+  min-height: 72px;
+  border: 1px solid #d0d0d0;
+  border-radius: 8px;
+  background: #fbfafa;
+}
+
+.gwa-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 26px 10px 14px;
+  overflow: hidden;
+  border-color: transparent;
+  background: linear-gradient(180deg, #62c275 0%, #39aa5d 100%);
+  color: #ffffff;
+}
+
+.gwa-card p,
+.metric-card p {
+  margin: 0;
+  color: inherit;
+  font-size: 14px;
+  line-height: 1.1;
+  font-weight: 800;
+}
+
+.gwa-card p {
+  opacity: 0.9;
+}
+
+.gwa-card strong {
+  display: block;
+  margin-top: 7px;
+  color: #fff34a;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 900;
+  text-align: center;
+}
+
+.gwa-card svg {
+  position: absolute;
+  right: 19px;
+  bottom: 11px;
+  width: 53px;
+  height: 43px;
+  fill: none;
+  stroke: rgba(20, 60, 34, 0.46);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 11px;
+  color: #4d4d4d;
+}
+
+.metric-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  background: #9cd5ae;
+  color: #285d3b;
+}
+
+.metric-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metric-card strong {
+  display: block;
+  margin-top: 5px;
+  color: #164b27;
+  font-size: 24px;
+  line-height: 1;
+  font-weight: 900;
+  text-align: center;
+}
+
+.published-panel {
+  overflow: hidden;
+  border: 1px solid #1c5a34;
+  border-radius: 9px 9px 0 0;
+  background: #ffffff;
+}
+
+.panel-head {
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 13px 6px 12px;
+  border-bottom: 1px solid #6e6e6e;
+}
+
+.panel-head h2 {
+  margin: 0;
+  color: #174b2a;
+  font-size: 20px;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.panel-head select {
+  width: 131px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid #5e5e5e;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #000000;
+  font-size: 8px;
+  font-weight: 800;
+}
+
+.table-responsive {
+  width: 100%;
+  overflow: auto;
+  max-height: calc(100vh - 249px);
+}
+
+.published-table {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.published-table th {
+  height: 38px;
+  padding: 5px 8px;
+  background: #a9edbd;
+  color: #114b27;
+  font-size: 11px;
+  line-height: 1.03;
+  font-weight: 900;
+  text-align: center;
+}
+
+.published-table th:nth-child(1) {
+  width: 80px;
+}
+
+.published-table th:nth-child(2) {
+  width: 120px;
+}
+
+.published-table th:nth-child(3) {
+  width: 128px;
+}
+
+.published-table th:nth-child(8) {
+  width: 82px;
+}
+
+.published-table td {
+  height: 28px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #8c8c8c;
+  color: #111111;
+  font-size: 10px;
+  line-height: 1.05;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.published-table td:nth-child(2),
+.published-table td:nth-child(3) {
+  text-align: left;
+}
+
+.published-table .code,
+.grade-point {
+  font-weight: 900;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 45px;
+  min-height: 14px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 8px;
+  line-height: 1;
+  font-weight: 900;
+}
+
+.pill.passed {
+  background: #c2eccf;
+  color: #1a6e38;
+}
+
+.pill.failed {
+  background: #f8c8c8;
+  color: #a32626;
+}
+
+@media (max-width: 860px) {
+  .summary-cards {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .gwa-card {
+    grid-column: 1 / -1;
   }
 }
 
-function sendMessage() {
-  const text = chatInput.value.trim();
-  if (!text || !activeChatSubject.value) return;
-  const code = activeChatSubject.value.code;
-  if (!chatMessages.value[code]) chatMessages.value[code] = [];
-  chatMessages.value[code].push(text);
-  chatInput.value = '';
-  nextTick(() => {
-    if (chatMessagesRef.value) {
-      chatMessagesRef.value.scrollTop = chatMessagesRef.value.scrollHeight;
-    }
-  });
+@media (max-width: 720px) {
+  .student-sidebar {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 70px;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .student-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.42);
+    z-index: 15;
+  }
+
+  .hamburger {
+    display: grid;
+  }
+
+  .student-header {
+    padding-inline: 14px;
+  }
+
+  .grades-body {
+    padding: 14px;
+  }
+
+  .summary-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .panel-head select {
+    width: 100%;
+    font-size: 11px;
+  }
 }
-</script>
+</style>

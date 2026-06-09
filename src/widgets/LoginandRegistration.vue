@@ -1,8 +1,8 @@
 <template>
   <div>
-    <div v-if="showStudentDashboard">
-      <StudentDashboard @signout="goBack" />
-    </div>
+    <StudentDashboard v-if="showStudentDashboard" @signout="goBack" />
+    <ProfessorDashboard v-else-if="showProfessorDashboard" @signout="goBack" />
+    <RegistarDashboard v-else-if="showRegistarDashboard" @signout="goBack" />
 
     <div v-else class="min-h-screen bg-emerald-200 flex flex-col items-center justify-center p-4 font-sans text-slate-900">
       <!-- Header Section -->
@@ -60,9 +60,13 @@
 <script setup>
 import { ref } from 'vue';
 import StudentDashboard from './StudentDashboard.vue';
+import ProfessorDashboard from './ProfessorDashboard.vue';
+import RegistarDashboard from './RegistarDashboard.vue';
 
 const selectedRole = ref(null);
 const showStudentDashboard = ref(false);
+const showProfessorDashboard = ref(false);
+const showRegistarDashboard = ref(false);
 
 const roles = [
   { id: 'student', title: 'Student', desc: 'Access grades, schedule, docs' },
@@ -72,14 +76,23 @@ const roles = [
 
 function handleRoleClick(role) {
   selectedRole.value = role;
+  console.log('Role clicked:', role)
   // Immediately open the student dashboard for demo student
   if (role === 'student') {
     showStudentDashboard.value = true;
+  }
+  if (role === 'professor') {
+    showProfessorDashboard.value = true;
+  }
+  if (role === 'registrar') {
+    showRegistarDashboard.value = true;
   }
 }
 
 function goBack() {
   showStudentDashboard.value = false;
+  showProfessorDashboard.value = false;
+  showRegistarDashboard.value = false;
   selectedRole.value = null;
 }
 </script>
