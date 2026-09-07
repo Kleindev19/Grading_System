@@ -1,7 +1,34 @@
 import { reactive } from 'vue'
 
+export interface Subject {
+  code: string
+  status: 'APPROVED' | 'PENDING'
+  name: string
+  subtitle?: string
+  section: string
+  students: number
+  dept: string
+}
+
+export interface Assessment {
+  key: string
+  label: string
+  max: number
+}
+
+export interface GradeSheet {
+  code: string
+  subject: string
+  section: string
+  professor: string
+  semester: string
+  students: number
+  submitted: string
+  status: 'Submitted' | 'Approved' | 'Published'
+}
+
 // Centralized data provider functions — replace inline mock data with function-based sources
-export function getSubjects() {
+export function getSubjects(): Subject[] {
   return [
     { code: 'ITRSRC1',  status: 'APPROVED', name: 'Capstone Project 1',   section: 'BSIT-3A', students: 60, dept: 'Institute of Computing Science' },
     { code: 'ITQUANM',  status: 'PENDING',  name: 'Quantitative Methods', section: 'BSIT-3B', students: 55, dept: 'Institute of Computing Science' },
@@ -10,7 +37,7 @@ export function getSubjects() {
   ]
 }
 
-export function getMidtermTable() {
+export function getMidtermTable(): Array<{ item: string; percentage: string }> {
   return [
     { item: 'Quiz',       percentage: '15%' },
     { item: 'Activity',   percentage: '35%' },
@@ -19,7 +46,7 @@ export function getMidtermTable() {
   ]
 }
 
-export function getDefaultAssessments() {
+export function getDefaultAssessments(): Assessment[] {
   return [
     { key: 'Q1',   label: 'Q1',   max: 20 },
     { key: 'Q2',   label: 'Q2',   max: 20 },
@@ -30,13 +57,13 @@ export function getDefaultAssessments() {
 }
 
 // Create empty students map keyed by subject code (no inline mock student rows)
-export function createEmptyStudentsMap(subjects) {
-  return Object.fromEntries(subjects.map(s => [s.code, []]))
+export function createEmptyStudentsMap(subjects: Subject[]): Record<string, unknown[]> {
+  return Object.fromEntries(subjects.map(subject => [subject.code, []]))
 }
 
-export function createAssessmentsMap(subjects) {
+export function createAssessmentsMap(subjects: Subject[]): Record<string, Assessment[]> {
   const def = getDefaultAssessments()
-  return Object.fromEntries(subjects.map(s => [s.code, def.map(a => ({ ...a }))]))
+  return Object.fromEntries(subjects.map(subject => [subject.code, def.map(assessment => ({ ...assessment }))]))
 }
 
 export function getPublishedGrades() {
@@ -48,9 +75,9 @@ export function getGradeSheets() {
   return gradeSheets
 }
 
-const gradeSheets = reactive([])
+const gradeSheets = reactive<GradeSheet[]>([])
 
-export function submitGradeSheet(sheet) {
+export function submitGradeSheet(sheet: GradeSheet): void {
   const existingIndex = gradeSheets.findIndex(item => item.code === sheet.code)
   if (existingIndex === -1) gradeSheets.push(sheet)
   else gradeSheets[existingIndex] = sheet
