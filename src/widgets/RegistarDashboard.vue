@@ -278,6 +278,7 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { getGradeSheets, getReviewStudents, getInstitutes } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
 defineEmits(['signout'])
@@ -288,83 +289,36 @@ const search = ref('')
 const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
 
-const institutes = [
-  {
-    id: 'ibe',
-    short: 'IBE',
-    name: 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP',
-    color: '#fbff78',
-  },
-  {
-    id: 'ics',
-    short: 'ICS',
-    name: 'INSTITUTE OF COMPUTING SCIENCE',
-    color: '#ffdd88',
-  },
-  {
-    id: 'ioe',
-    short: 'IOE',
-    name: 'INSTITUTE OF EDUCATION',
-    color: '#5ec7ee',
-  },
-]
+const institutes = getInstitutes()
 
-const gradeSheets = [
-  {
-    code: 'ITRSRC1',
-    subject: 'Capstone Project 1',
-    section: 'BSE - 1A',
-    professor: 'Mr. Junas Arroyo',
-    semester: '1st Semester 2026-2027',
-    students: 35,
-    submitted: 'MAY 7, 2026',
-    status: 'Submitted',
-  },
-]
+const gradeSheets = getGradeSheets()
+const reviewStudents = getReviewStudents()
 
-const reviewStudents = [
-  {
-    rowId: 1,
-    id: '21-00123',
-    name: 'Juan Dela Cruz',
-    midterm: '85.4',
-    finals: '87.4',
-    finalGrade: '86.4',
-    gradePoint: '2.00',
-    remarks: 'PASSED',
-  },
-  {
-    rowId: 2,
-    id: '21-00123',
-    name: 'Juan Dela Cruz',
-    midterm: '85.4',
-    finals: '87.4',
-    finalGrade: '86.4',
-    gradePoint: '2.00',
-    remarks: 'PASSED',
-  },
-]
-
-const summaryCards = [
-  {
-    label: 'Pending Review',
-    count: 3,
-    note: 'Awaiting your approval',
-    icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 3"></path></svg>`,
-  },
-  {
-    label: 'Approved',
-    count: 3,
-    note: 'Ready to publish',
-    icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>`,
-  },
-  {
-    label: 'Published',
-    count: 3,
-    note: 'Visible to students',
-    icon: `<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path><circle cx="17" cy="13" r="3"></circle><path d="m21 21-2.3-2.3"></path></svg>`,
-  },
-]
+const summaryCards = computed(() => {
+  const pending = gradeSheets.filter(s => s.status === 'Submitted').length
+  const approved = gradeSheets.filter(s => s.status === 'Approved').length
+  const published = gradeSheets.filter(s => s.status === 'Published').length
+  return [
+    {
+      label: 'Pending Review',
+      count: pending,
+      note: 'Awaiting your approval',
+      icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 3"></path></svg>`,
+    },
+    {
+      label: 'Approved',
+      count: approved,
+      note: 'Ready to publish',
+      icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>`,
+    },
+    {
+      label: 'Published',
+      count: published,
+      note: 'Visible to students',
+      icon: `<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path><circle cx="17" cy="13" r="3"></circle><path d="m21 21-2.3-2.3"></path></svg>`,
+    },
+  ]
+})
 
 const filteredSheets = computed(() => {
   const query = search.value.trim().toLowerCase()

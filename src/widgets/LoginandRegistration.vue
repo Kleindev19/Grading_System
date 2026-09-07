@@ -1,7 +1,7 @@
 <template>
   <div>
     <StudentDashboard v-if="showStudentDashboard" @signout="goBack" />
-    <ProfessorDashboard v-else-if="showProfessorDashboard" @signout="goBack" />
+    <ProfessorDashboard v-else-if="showProfessorDashboard" @signout="goBack" @submitted="goToRegistrar" />
     <RegistarDashboard v-else-if="showRegistarDashboard" @signout="goBack" />
 
     <div v-else class="min-h-screen bg-emerald-200 flex flex-col items-center justify-center p-4 font-sans text-slate-900">
@@ -59,6 +59,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import { getRoles } from '../services/dataService'
 import StudentDashboard from './StudentDashboard.vue';
 import ProfessorDashboard from './ProfessorDashboard.vue';
 import RegistarDashboard from './RegistarDashboard.vue';
@@ -68,11 +69,7 @@ const showStudentDashboard = ref(false);
 const showProfessorDashboard = ref(false);
 const showRegistarDashboard = ref(false);
 
-const roles = [
-  { id: 'student', title: 'Student', desc: 'Access grades, schedule, docs' },
-  { id: 'professor', title: 'Professor', desc: 'Manage grades & classes' },
-  { id: 'registrar', title: 'Registrar', desc: 'System administration' }
-];
+const roles = getRoles()
 
 function handleRoleClick(role) {
   selectedRole.value = role;
@@ -94,5 +91,10 @@ function goBack() {
   showProfessorDashboard.value = false;
   showRegistarDashboard.value = false;
   selectedRole.value = null;
+}
+
+function goToRegistrar() {
+  showProfessorDashboard.value = false;
+  showRegistarDashboard.value = true;
 }
 </script>

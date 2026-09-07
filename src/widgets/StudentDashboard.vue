@@ -164,6 +164,7 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { getPublishedGrades } from '../services/dataService'
 const sidebarOpen = ref(false)
 function toggleSidebar(){ sidebarOpen.value = !sidebarOpen.value }
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
@@ -176,16 +177,7 @@ const enrolledSubjects = ref(8)
 const studentStatus = ref('Regular')
 const totalUnits = ref(24)
 
-const publishedGrades = [
-	{ code: 'ITNETW2', description: 'Networking 2', professor: 'Prof. Junas Arroyo', midterm: 88, finals: 92, average: 90.4, grade: '1.50', remarks: 'PASSED' },
-	{ code: 'ITINFOM', description: 'Information Management', professor: 'Prof. Junas Arroyo', midterm: 95, finals: 93, average: 93.8, grade: '1.25', remarks: 'PASSED' },
-	{ code: 'ITAPPSD', description: 'Application Development and Emerging Technologies', professor: 'Prof. Junas Arroyo', midterm: 85, finals: 87, average: 86.2, grade: '2.00', remarks: 'PASSED' },
-	{ code: 'ITIASE1', description: 'Information Assurance and Security 1', professor: 'Prof. Junas Arroyo', midterm: 90, finals: 90, average: 90.0, grade: '1.50', remarks: 'PASSED' },
-	{ code: 'ITHUMCI', description: 'Human Computer Interaction', professor: 'Prof. Junas Arroyo', midterm: 98, finals: 96, average: 96.8, grade: '1.00', remarks: 'PASSED' },
-  { code: 'ITELEC3', description: 'Integrative Programming and Technologies 2', professor: 'Prof. Junas Arroyo', midterm: 82, finals: 85, average: 83.8, grade: '2.25', remarks: 'PASSED' },
-  { code: 'ITOPSYS', description: 'Operating System', professor: 'Prof. Junas Arroyo', midterm: 89, finals: 91, average: 90.2, grade: '1.50', remarks: 'PASSED' },
-  { code: 'ITADBS', description: 'Advanced Database', professor: 'Prof. Junas Arroyo', midterm: 92, finals: 93, average: 92.6, grade: '1.25', remarks: 'PASSED' },
-]
+const publishedGrades = getPublishedGrades()
 
 const filteredPublished = computed(()=> publishedGrades.filter(p =>
 	!searchPublished.value || p.code.toLowerCase().includes(searchPublished.value.toLowerCase()) || p.description.toLowerCase().includes(searchPublished.value.toLowerCase())
