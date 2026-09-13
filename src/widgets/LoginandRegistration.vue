@@ -1,100 +1,304 @@
 <template>
-  <div>
-    <StudentDashboard v-if="showStudentDashboard" @signout="goBack" />
-    <ProfessorDashboard v-else-if="showProfessorDashboard" @signout="goBack" @submitted="goToRegistrar" />
-    <RegistarDashboard v-else-if="showRegistarDashboard" @signout="goBack" />
+  <StudentDashboard v-if="user?.role === 'student'" :user="user" @signout="logout" />
+  <ProfessorDashboard v-else-if="user?.role === 'professor'" :user="user" @signout="logout" @submitted="goToRegistrar" />
+  <RegistarDashboard v-else-if="user?.role === 'registrar'" :user="user" @signout="logout" />
 
-    <div v-else class="min-h-screen bg-emerald-200 flex flex-col items-center justify-center p-4 font-sans text-slate-900">
-      <!-- Header Section -->
-      <div class="text-center mb-10">
-        <div class="w-16 h-16 bg-emerald-600 rounded-2xl flex items-center justify-center text-white mx-auto mb-4 shadow-lg">
-          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 14l9-5-9-5-9 5 9 5z"></path>
-          </svg>
+  <main v-else class="auth-page">
+    <div class="auth-background-shape auth-background-shape-one" aria-hidden="true"></div>
+    <div class="auth-background-shape auth-background-shape-two" aria-hidden="true"></div>
+    <section class="auth-card">
+      <div class="auth-brand">
+        <div class="auth-mark" aria-hidden="true">
+          <img :src="colegioLogo" alt="" />
         </div>
-        <h1 class="text-3xl font-bold text-slate-900 tracking-tight">Colegio de Montalban</h1>
-        <p class="text-emerald-900 font-medium">Academic Management Portal</p>
+        <p class="auth-eyebrow">COLEGIO DE MONTALBAN</p>
+        <h1>Academic Management Portal</h1>
+        <p class="auth-brand-caption">A secure space for students, professors, and registrar staff.</p>
       </div>
 
-      <!-- Role Selection Card -->
-      <div class="w-full max-w-lg bg-white rounded-3xl shadow-xl p-8 border border-slate-100">
-        <h2 class="text-lg font-semibold mb-6">Select your role to continue</h2>
-        
-        <div class="space-y-4">
-          <button
-            v-for="role in roles"
-            :key="role.id"
-            @click="handleRoleClick(role.id)"
-            :class="[
-              'w-full flex items-center gap-4 p-4 rounded-2xl border transition-all duration-200 text-left',
-              selectedRole === role.id 
-                ? 'border-emerald-500 bg-emerald-50' 
-                : 'border-slate-100 hover:border-emerald-200 hover:bg-slate-50'
-            ]"
-          >
-            <div :class="['p-3 rounded-xl', selectedRole === role.id ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600']">
-              <!-- Icon SVG -->
-              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
-              </svg>
-            </div>
-            <div class="flex-grow">
-              <h3 class="font-bold text-slate-900">{{ role.title }}</h3>
-              <p class="text-sm text-slate-500">{{ role.desc }}</p>
-            </div>
-            <div :class="[selectedRole === role.id ? 'text-emerald-600' : 'text-slate-300']">
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-            </div>
-          </button>
-        </div>
+      <div class="auth-tabs" role="tablist" aria-label="Authentication">
+        <button type="button" role="tab" :aria-selected="mode === 'login'" :class="{ active: mode === 'login' }" @click="switchMode('login')">Login</button>
+        <button type="button" role="tab" :aria-selected="mode === 'register'" :class="{ active: mode === 'register' }" @click="switchMode('register')">Registration</button>
+      </div>
 
-        <p class="mt-8 text-center text-xs text-slate-400">
-          For demonstration purposes only.<br />
-          No real credentials required.
+      <form v-if="verificationRequired" class="auth-form" @submit.prevent="verifyEmail">
+        <h2>Verify your email</h2>
+        <p class="auth-caption">Enter the 6-digit code sent to {{ verificationEmail }}.</p>
+        <label>
+          Verification code
+          <input v-model.trim="verificationCode" type="text" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code" placeholder="000000" required />
+        </label>
+        <p v-if="errorMessage" class="auth-error" role="alert">{{ errorMessage }}</p>
+        <button class="auth-submit" type="submit" :disabled="loading">{{ loading ? 'Please wait...' : 'Verify email' }}</button>
+        <p class="auth-switch"><button type="button" @click="cancelVerification">Back to login</button></p>
+      </form>
+
+      <form v-else class="auth-form" @submit.prevent="submitAuth">
+        <h2>{{ mode === 'login' ? 'Welcome back' : 'Create an account' }}</h2>
+        <p class="auth-caption">
+          {{ mode === 'login' ? 'Sign in to access your academic dashboard.' : 'Register an account to get started.' }}
         </p>
-      </div>
-    </div>
-  </div>
+
+        <label v-if="mode === 'register'">
+          Full name
+          <input v-model.trim="form.name" type="text" autocomplete="name" required />
+        </label>
+        <label>
+          Username
+          <span class="input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>
+            <input v-model.trim="form.username" type="text" autocomplete="username" placeholder="Enter your username" required />
+          </span>
+        </label>
+        <label v-if="mode === 'register'">
+          Email address
+          <input v-model.trim="form.email" type="email" autocomplete="email" required />
+        </label>
+        <label v-if="mode === 'register'">
+          Account role
+          <select v-model="form.role" required>
+            <option value="student">Student</option>
+            <option value="professor">Professor</option>
+            <option value="registrar">Registrar</option>
+          </select>
+        </label>
+        <label>
+          Password
+          <span class="input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+            <input v-model="form.password" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" placeholder="Enter your password" minlength="8" required />
+          </span>
+        </label>
+        <label v-if="mode === 'register'">
+          Confirm password
+          <span class="input-wrap">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
+            <input v-model="form.password_confirmation" type="password" autocomplete="new-password" placeholder="Re-enter your password" minlength="8" required />
+          </span>
+        </label>
+
+        <p v-if="errorMessage" class="auth-error" role="alert">{{ errorMessage }}</p>
+        <button class="auth-submit" type="submit" :disabled="loading">
+          {{ loading ? 'Please wait...' : mode === 'login' ? 'Login' : 'Create account' }}
+        </button>
+        <p class="auth-switch">
+          {{ mode === 'login' ? "Don't have an account?" : 'Already have an account?' }}
+          <button type="button" @click="switchMode(mode === 'login' ? 'register' : 'login')">
+            {{ mode === 'login' ? 'Register here' : 'Login here' }}
+          </button>
+        </p>
+      </form>
+    </section>
+  </main>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { getRoles } from '../services/dataService'
-import StudentDashboard from './StudentDashboard.vue';
-import ProfessorDashboard from './ProfessorDashboard.vue';
-import RegistarDashboard from './RegistarDashboard.vue';
+import { onMounted, reactive, ref } from 'vue'
+import { parseApiResponse } from '../services/dataService'
+import StudentDashboard from './StudentDashboard.vue'
+import ProfessorDashboard from './ProfessorDashboard.vue'
+import RegistarDashboard from './RegistarDashboard.vue'
+import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
-const selectedRole = ref(null);
-const showStudentDashboard = ref(false);
-const showProfessorDashboard = ref(false);
-const showRegistarDashboard = ref(false);
+const mode = ref('login')
+const loading = ref(false)
+const errorMessage = ref('')
+const user = ref(null)
+const verificationRequired = ref(false)
+const verificationEmail = ref('')
+const verificationCode = ref('')
+const form = reactive({
+  name: '',
+  username: '',
+  email: '',
+  password: '',
+  password_confirmation: '',
+  role: 'student',
+})
 
-const roles = getRoles()
+function switchMode(nextMode) {
+  mode.value = nextMode
+  errorMessage.value = ''
+  form.password = ''
+  form.password_confirmation = ''
+}
 
-function handleRoleClick(role) {
-  selectedRole.value = role;
-  console.log('Role clicked:', role)
-  // Immediately open the student dashboard for demo student
-  if (role === 'student') {
-    showStudentDashboard.value = true;
-  }
-  if (role === 'professor') {
-    showProfessorDashboard.value = true;
-  }
-  if (role === 'registrar') {
-    showRegistarDashboard.value = true;
+async function submitAuth() {
+  loading.value = true
+  errorMessage.value = ''
+
+  try {
+    const response = await fetch(`/api/${mode.value}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify(mode.value === 'login'
+        ? { username: form.username, password: form.password }
+        : form),
+    })
+    const payload = await parseApiResponse(response)
+
+    if (!response.ok) {
+      throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Authentication failed.')
+    }
+
+    if (payload.requires_verification) {
+      verificationRequired.value = true
+      verificationEmail.value = payload.email
+      return
+    }
+
+    completeLogin(payload)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the server.'
+  } finally {
+    loading.value = false
   }
 }
 
-function goBack() {
-  showStudentDashboard.value = false;
-  showProfessorDashboard.value = false;
-  showRegistarDashboard.value = false;
-  selectedRole.value = null;
+async function verifyEmail() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await fetch('/api/verify-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ email: verificationEmail.value, code: verificationCode.value }),
+    })
+    const payload = await parseApiResponse(response)
+    if (!response.ok) throw new Error(payload.message || 'Unable to verify email.')
+    completeLogin(payload)
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : 'Unable to verify email.'
+  } finally {
+    loading.value = false
+  }
+}
+
+function completeLogin(payload) {
+  localStorage.setItem('auth_token', payload.token)
+  user.value = payload.user
+  verificationRequired.value = false
+  verificationEmail.value = ''
+  verificationCode.value = ''
+  resetForm()
+}
+
+function cancelVerification() {
+  verificationRequired.value = false
+  verificationEmail.value = ''
+  verificationCode.value = ''
+  errorMessage.value = ''
+  switchMode('login')
+}
+
+async function restoreSession() {
+  const token = localStorage.getItem('auth_token')
+  if (!token) return
+
+  try {
+    const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
+    if (!response.ok) throw new Error('Session expired.')
+    user.value = (await parseApiResponse<{ user: typeof user.value }>(response)).user
+  } catch {
+    localStorage.removeItem('auth_token')
+  }
+}
+
+async function logout() {
+  const token = localStorage.getItem('auth_token')
+  if (token) {
+    await fetch('/api/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).catch(() => {})
+  }
+  localStorage.removeItem('auth_token')
+  user.value = null
+  verificationRequired.value = false
+  switchMode('login')
 }
 
 function goToRegistrar() {
-  showProfessorDashboard.value = false;
-  showRegistarDashboard.value = true;
+  user.value = { ...user.value, role: 'registrar' }
 }
+
+function resetForm() {
+  form.name = ''
+  form.username = ''
+  form.email = ''
+  form.password = ''
+  form.password_confirmation = ''
+  form.role = 'student'
+}
+
+onMounted(restoreSession)
 </script>
+
+<style scoped>
+.auth-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #edf5ef 0%, #f8fbf7 52%, #e7f0df 100%);
+  color: #173025;
+  font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;
+}
+
+.auth-card {
+  position: relative;
+  z-index: 1;
+  width: min(100%, 460px);
+  padding: 38px 42px 32px;
+  border: 1px solid #d8e5db;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(25, 67, 42, 0.16);
+}
+
+.auth-brand { text-align: center; }
+.auth-mark {
+  width: 70px;
+  height: 70px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  border-radius: 50%;
+  background: #f3f8ef;
+  border: 4px solid #d9e8c6;
+}
+.auth-mark img { width: 58px; height: 58px; object-fit: contain; }
+.auth-eyebrow { margin: 0; color: #527d35; font-size: 11px; font-weight: 800; letter-spacing: 1.4px; }
+.auth-brand h1 { margin: 7px 0 0; color: #173025; font-size: 23px; }
+.auth-brand-caption { margin: 8px 0 28px; color: #718177; font-size: 13px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; margin-bottom: 27px; border-bottom: 1px solid #d9e4dd; }
+.auth-tabs button { padding: 12px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #77847c; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; }
+.auth-tabs button:hover { color: #17663a; background: #f6faf5; }
+.auth-tabs button.active { border-bottom-color: #146b3b; color: #146b3b; }
+.auth-form h2 { margin: 0; color: #173025; font-size: 22px; }
+.auth-caption { margin: 5px 0 20px; color: #6a796f; font-size: 14px; }
+.auth-form label { display: grid; gap: 6px; margin-top: 14px; color: #365442; font-size: 13px; font-weight: 700; }
+.auth-form input, .auth-form select { width: 100%; padding: 12px; border: 1px solid #cbd9d0; border-radius: 7px; background: #fff; color: #173025; font: inherit; font-size: 14px; }
+.auth-form select { cursor: pointer; }
+.auth-form input::placeholder { color: #a2ada6; }
+.auth-form input:focus, .auth-form select:focus { outline: 2px solid #8fcdb0; outline-offset: 1px; border-color: #4f8b62; }
+.input-wrap { position: relative; display: block; }
+.input-wrap svg { position: absolute; left: 12px; top: 50%; width: 17px; height: 17px; transform: translateY(-50%); fill: none; stroke: #789181; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; pointer-events: none; }
+.input-wrap input { padding-left: 38px; }
+.auth-error { margin-top: 16px; color: #b42318; font-size: 13px; }
+.auth-submit { width: 100%; margin-top: 22px; padding: 13px; border: 0; border-radius: 7px; background: #17663a; color: #fff; cursor: pointer; font: inherit; font-size: 14px; font-weight: 800; transition: background 0.2s, transform 0.2s; }
+.auth-submit:hover:not(:disabled) { background: #0f512c; transform: translateY(-1px); }
+.auth-submit:disabled { cursor: wait; opacity: 0.65; }
+.auth-submit:focus-visible, .auth-tabs button:focus-visible, .auth-switch button:focus-visible { outline: 3px solid #a8d7bb; outline-offset: 3px; }
+.auth-switch { margin: 21px 0 0; color: #77847c; text-align: center; font-size: 13px; }
+.auth-switch button { padding: 0; border: 0; background: transparent; color: #17663a; cursor: pointer; font: inherit; font-weight: 800; }
+.auth-background-shape { position: absolute; z-index: -1; border-radius: 50%; background: rgba(98, 157, 104, 0.12); }
+.auth-background-shape-one { width: 470px; height: 470px; top: -180px; right: -130px; }
+.auth-background-shape-two { width: 360px; height: 360px; bottom: -170px; left: -120px; background: rgba(186, 205, 99, 0.2); }
+
+@media (max-width: 520px) {
+  .auth-page { padding: 16px; }
+  .auth-card { padding: 30px 22px 25px; }
+  .auth-brand h1 { font-size: 20px; }
+}
+</style>

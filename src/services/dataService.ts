@@ -1,5 +1,3 @@
-import { reactive } from 'vue'
-
 export interface Subject {
   code: string
   status: 'APPROVED' | 'PENDING'
@@ -17,6 +15,7 @@ export interface Assessment {
 }
 
 export interface GradeSheet {
+  id?: number
   code: string
   subject: string
   section: string
@@ -25,16 +24,28 @@ export interface GradeSheet {
   students: number
   submitted: string
   status: 'Submitted' | 'Approved' | 'Published'
+  student_records?: StudentRecord[]
+}
+
+export interface StudentRecord {
+  id: string
+  name: string
+  midterm?: string
+  finals?: string
+  finalGrade?: string
+  gradePoint?: string
+  remarks?: string
+}
+
+export interface Student {
+  id?: number
+  student_id: string
+  name: string
 }
 
 // Centralized data provider functions — replace inline mock data with function-based sources
 export function getSubjects(): Subject[] {
-  return [
-    { code: 'ITRSRC1',  status: 'APPROVED', name: 'Capstone Project 1',   section: 'BSIT-3A', students: 60, dept: 'Institute of Computing Science' },
-    { code: 'ITQUANM',  status: 'PENDING',  name: 'Quantitative Methods', section: 'BSIT-3B', students: 55, dept: 'Institute of Computing Science' },
-    { code: 'ITELEC4',  status: 'APPROVED', name: 'IT Elective 4', subtitle: '(Platform Technologies)', section: 'BSIT-3A', students: 60, dept: 'Institute of Computing Science' },
-    { code: 'ITELEC4B', status: 'APPROVED', name: 'IT Elective 4', subtitle: '(Platform Technologies)', section: 'BSIT-3B', students: 58, dept: 'Institute of Computing Science' },
-  ]
+  return []
 }
 
 export function getMidtermTable(): Array<{ item: string; percentage: string }> {
@@ -66,21 +77,74 @@ export function createAssessmentsMap(subjects: Subject[]): Record<string, Assess
   return Object.fromEntries(subjects.map(subject => [subject.code, def.map(assessment => ({ ...assessment }))]))
 }
 
-export function getPublishedGrades() {
-  // Return an empty list by default — replace with API call when available
-  return []
+function authHeaders(): HeadersInit {
+  const token = localStorage.getItem('auth_token')
+  return token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' }
 }
 
-export function getGradeSheets() {
-  return gradeSheets
+export async function parseApiResponse<T>(response: Response): Promise<T> {
+  const body = await response.text()
+
+  if (!body.trim()) {
+    if (!response.ok) throw new Error(`Request failed (${response.status} ${response.statusText}).`)
+    return {} as T
+  }
+
+  try {
+    return JSON.parse(body) as T
+  } catch {
+    if (!response.ok) throw new Error(`Request failed (${response.status} ${response.statusText}).`)
+    throw new Error('The server returned an invalid response.')
+  }
 }
 
-const gradeSheets = reactive<GradeSheet[]>([])
+async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
+  })
+  const payload = await parseApiResponse<T & { message?: string }>(response)
+  if (!response.ok) throw new Error(payload.message || 'Request failed.')
+  return payload as T
+}
 
-export function submitGradeSheet(sheet: GradeSheet): void {
-  const existingIndex = gradeSheets.findIndex(item => item.code === sheet.code)
-  if (existingIndex === -1) gradeSheets.push(sheet)
-  else gradeSheets[existingIndex] = sheet
+export async function getGradeSheets(): Promise<GradeSheet[]> {
+  const payload = await apiRequest<{ grade_sheets: GradeSheet[] }>('/grade-sheets')
+  return payload.grade_sheets
+}
+
+export async function submitGradeSheet(sheet: GradeSheet, studentRecords: StudentRecord[] = []): Promise<GradeSheet> {
+  const payload = await apiRequest<{ grade_sheet: GradeSheet }>('/grade-sheets', {
+    method: 'POST',
+    body: JSON.stringify({ ...sheet, student_records: studentRecords }),
+  })
+  return payload.grade_sheet
+}
+
+export async function updateGradeSheetStatus(id: number, status: GradeSheet['status']): Promise<GradeSheet> {
+  const payload = await apiRequest<{ grade_sheet: GradeSheet }>(`/grade-sheets/${id}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  })
+  return payload.grade_sheet
+}
+
+export async function getPublishedGrades(): Promise<GradeSheet[]> {
+  const payload = await apiRequest<{ grade_sheets: GradeSheet[] }>('/published-grades')
+  return payload.grade_sheets
+}
+
+export async function getStudents(): Promise<Student[]> {
+  const payload = await apiRequest<{ students: Student[] }>('/students')
+  return payload.students
+}
+
+export async function addStudent(student: Omit<Student, 'id'>): Promise<Student> {
+  const payload = await apiRequest<{ student: Student }>('/students', {
+    method: 'POST',
+    body: JSON.stringify(student),
+  })
+  return payload.student
 }
 
 export function getReviewStudents() {
@@ -97,23 +161,8 @@ export function getRoles() {
 
 export function getInstitutes() {
   return [
-    {
-      id: 'ibe',
-      short: 'IBE',
-      name: 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP',
-      color: '#fbff78',
-    },
-    {
-      id: 'ics',
-      short: 'ICS',
-      name: 'INSTITUTE OF COMPUTING SCIENCE',
-      color: '#ffdd88',
-    },
-    {
-      id: 'ioe',
-      short: 'IOE',
-      name: 'INSTITUTE OF EDUCATION',
-      color: '#5ec7ee',
-    },
+    { id: 'ibe', short: 'IBE', name: 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP', color: '#fbff78' },
+    { id: 'ics', short: 'ICS', name: 'INSTITUTE OF COMPUTING SCIENCE', color: '#ffdd88' },
+    { id: 'ioe', short: 'IOE', name: 'INSTITUTE OF EDUCATION', color: '#5ec7ee' },
   ]
 }

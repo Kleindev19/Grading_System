@@ -34,7 +34,7 @@
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21a8 8 0 0 1 16 0" />
           </svg>
-          <span>STUDENT</span>
+          <span>{{ props.user?.name || 'STUDENT' }}</span>
         </div>
         <button class="logout-button" type="button" aria-label="Sign out" @click="signOut">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -143,14 +143,14 @@
               <tbody>
                 <tr v-for="p in filteredPublished" :key="p.code">
                   <td class="code" data-label="SUBJECT CODE">{{ p.code }}</td>
-                  <td data-label="DESCRIPTION">{{ p.description }}</td>
+                  <td data-label="DESCRIPTION">{{ p.subject }}</td>
                   <td data-label="PROFESSOR">{{ p.professor }}</td>
-                  <td data-label="MIDTERM 40%">{{ p.midterm }}</td>
-                  <td data-label="FINALS 60%">{{ p.finals }}</td>
-                  <td data-label="FINAL AVERAGE">{{ p.average }}</td>
-                  <td class="grade-point" data-label="GRADE POINT">{{ p.grade }}</td>
+                  <td data-label="MIDTERM 40%">-</td>
+                  <td data-label="FINALS 60%">-</td>
+                  <td data-label="FINAL AVERAGE">-</td>
+                  <td class="grade-point" data-label="GRADE POINT">-</td>
                   <td data-label="REMARKS">
-                    <span :class="['pill', p.remarks.toLowerCase() === 'passed' ? 'passed' : 'failed']">{{ p.remarks }}</span>
+                    <span class="pill passed">Published</span>
                   </td>
                 </tr>
               </tbody>
@@ -163,24 +163,33 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { getPublishedGrades } from '../services/dataService'
 const sidebarOpen = ref(false)
 function toggleSidebar(){ sidebarOpen.value = !sidebarOpen.value }
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
+const props = defineProps({ user: { type: Object, default: null } })
 const searchPublished = ref('')
 const semester = ref('1st Semester 2025-2026')
 
-const gwa = ref('1.59')
-const enrolledSubjects = ref(8)
-const studentStatus = ref('Regular')
-const totalUnits = ref(24)
+const gwa = ref('-')
+const enrolledSubjects = ref(0)
+const studentStatus = ref('No records')
+const totalUnits = ref(0)
 
-const publishedGrades = getPublishedGrades()
+const publishedGrades = ref([])
 
-const filteredPublished = computed(()=> publishedGrades.filter(p =>
-	!searchPublished.value || p.code.toLowerCase().includes(searchPublished.value.toLowerCase()) || p.description.toLowerCase().includes(searchPublished.value.toLowerCase())
+onMounted(async () => {
+  try {
+    publishedGrades.value = await getPublishedGrades()
+  } catch {
+    publishedGrades.value = []
+  }
+})
+
+const filteredPublished = computed(()=> publishedGrades.value.filter(p =>
+  !searchPublished.value || p.code.toLowerCase().includes(searchPublished.value.toLowerCase()) || p.subject.toLowerCase().includes(searchPublished.value.toLowerCase())
 ))
 
 function signOut(){

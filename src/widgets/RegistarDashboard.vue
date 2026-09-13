@@ -37,7 +37,7 @@
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21a8 8 0 0 1 16 0" />
           </svg>
-          <span>REGISTRAR</span>
+          <span>{{ props.user?.name || 'REGISTRAR' }}</span>
         </div>
         <button class="logout-button" type="button" aria-label="Sign out" @click="$emit('signout')">
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -83,21 +83,21 @@
 
         <div class="management-panel">
           <div class="tabs-row">
-            <button class="tab-button active" type="button">
+            <button class="tab-button" :class="{ active: activeTab === 'approval' }" type="button" @click="activeTab = 'approval'">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m9 12 2 2 4-5" />
                 <circle cx="12" cy="12" r="9" />
               </svg>
               Grade Approval
             </button>
-            <button class="tab-button" type="button">
+            <button class="tab-button" :class="{ active: activeTab === 'release' }" type="button" @click="activeTab = 'release'">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <rect x="4" y="5" width="16" height="15" rx="2" />
                 <path d="M8 3v4M16 3v4M4 10h16" />
               </svg>
-              Release Schedule
+              Release &amp; Schedule
             </button>
-            <button class="tab-button" type="button">
+            <button class="tab-button" :class="{ active: activeTab === 'repository' }" type="button" @click="activeTab = 'repository'">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M6 3h9l3 3v15H6Z" />
                 <path d="M14 3v4h4M9 12h6M9 16h6" />
@@ -106,7 +106,7 @@
             </button>
           </div>
 
-          <div class="status-grid">
+          <div v-if="activeTab === 'approval'" class="status-grid">
             <article v-for="card in summaryCards" :key="card.label" class="status-card">
               <div>
                 <h3>{{ card.label }}</h3>
@@ -115,9 +115,22 @@
               </div>
               <div class="status-icon" v-html="card.icon"></div>
             </article>
+            <article class="calendar-card">
+              <div class="calendar-heading">
+                <b>Calendar</b>
+                <button type="button" aria-label="Open calendar">...</button>
+              </div>
+              <div class="calendar-days">
+                <span v-for="day in calendarDays" :key="day.label" :class="{ today: day.today }">
+                  <small>{{ day.label }}</small>
+                  <strong>{{ day.date }}</strong>
+                </span>
+              </div>
+              <b class="calendar-month">SEPTEMBER</b>
+            </article>
           </div>
 
-          <div class="approval-table-box">
+          <div v-if="activeTab === 'approval'" class="approval-table-box">
             <div class="toolbar">
               <label class="search-box">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -181,6 +194,95 @@
                 </tbody>
               </table>
             </div>
+          </div>
+
+          <section v-if="activeTab === 'approval'" class="registrar-students-box">
+            <div class="registrar-students-heading">
+              <div>
+                <h3>Student List</h3>
+                <p>Add the students who will be used in grade sheets.</p>
+              </div>
+            </div>
+            <div class="student-list-table">
+              <div class="student-list-header">
+                <strong>STUDENT ID</strong>
+                <strong>STUDENT NAME</strong>
+                <strong>INSTITUTE</strong>
+                <span>ACTION</span>
+              </div>
+              <form class="student-add-row" @submit.prevent="saveStudent">
+                <input v-model.trim="studentForm.student_id" placeholder="Enter student ID" required />
+                <input v-model.trim="studentForm.name" placeholder="Enter student name" required />
+                <input v-model.trim="studentForm.institute" placeholder="Enter student institute" required />
+                <button type="submit">+ Add Student</button>
+              </form>
+              <div v-for="student in students" :key="student.id" class="student-list-row">
+                <strong>{{ student.student_id }}</strong>
+                <span>{{ student.name }}</span>
+                <span>{{ student.institute || '-' }}</span>
+                <span class="student-added-label">Added</span>
+              </div>
+              <p v-if="students.length === 0" class="student-list-empty">No students added yet.</p>
+            </div>
+          </section>
+
+          <div v-else-if="activeTab === 'release'" class="release-panel">
+            <h3>Grade Release Settings</h3>
+            <div class="release-content">
+              <form class="release-form" @submit.prevent="addRelease">
+                <p class="release-form-title">+ Schedule New Release</p>
+                <div class="release-fields">
+                  <label>
+                    School Year
+                    <input v-model="releaseForm.schoolYear" type="text" />
+                  </label>
+                  <label>
+                    Semester
+                    <select v-model="releaseForm.semester">
+                      <option>Semester</option>
+                      <option>1st Semester</option>
+                      <option>2nd Semester</option>
+                    </select>
+                  </label>
+                  <label>
+                    Year Level
+                    <select v-model="releaseForm.yearLevel">
+                      <option>Year</option>
+                      <option>1st Year</option>
+                      <option>2nd Year</option>
+                      <option>3rd Year</option>
+                      <option>4th Year</option>
+                    </select>
+                  </label>
+                  <label>
+                    Released Date
+                    <input v-model="releaseForm.releasedDate" type="date" />
+                  </label>
+                </div>
+                <label class="course-field">
+                  Course <span>(multi-select)</span>
+                  <div class="course-chips">
+                    <button v-for="course in courses" :key="course" type="button" :class="{ selected: selectedCourses.includes(course) }" @click="toggleCourse(course)">
+                      {{ course }}
+                    </button>
+                  </div>
+                </label>
+                <button class="add-release-button" type="submit">+ Add</button>
+              </form>
+              <article class="published-card">
+                <div class="published-ring"></div>
+                <strong>{{ publishedCount }}</strong>
+                <div>
+                  <b>Published</b>
+                  <small>of 10 Ready to publish</small>
+                </div>
+              </article>
+            </div>
+          </div>
+
+          <div v-else class="repository-panel">
+            <h3>Grade Repository</h3>
+            <p>No published grade sheets available.</p>
           </div>
         </div>
       </section>
@@ -253,7 +355,7 @@
             </table>
 
             <div class="modal-actions">
-              <button class="approve-button" type="button">
+              <button class="approve-button" type="button" @click="changeStatus('Approved')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
                   <path d="m14 15 2 2 5-6" />
@@ -261,7 +363,7 @@
                 </svg>
                 Approve Grades
               </button>
-              <button class="reject-button" type="button">
+              <button class="reject-button" type="button" @click="changeStatus('Submitted')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="m15 9-6 6M9 9l6 6" />
@@ -277,10 +379,11 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
-import { getGradeSheets, getReviewStudents, getInstitutes } from '../services/dataService'
+import { computed, onMounted, ref } from 'vue'
+import { addStudent, getGradeSheets, getInstitutes, getStudents, updateGradeSheetStatus } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
+const props = defineProps({ user: { type: Object, default: null } })
 defineEmits(['signout'])
 
 const currentView = ref('institute')
@@ -288,41 +391,63 @@ const selectedInstitute = ref(null)
 const search = ref('')
 const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
+const activeTab = ref('approval')
+const publishedCount = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Published').length)
+const courses = ['BSBA HRM - Business Administration', 'BS Entrep - Entrepreneurship']
+const selectedCourses = ref([...courses])
+const releaseForm = ref({
+  schoolYear: '2025-2026',
+  semester: 'Semester',
+  yearLevel: 'Year',
+  releasedDate: '',
+})
+const calendarDays = [
+  { label: 'Mon', date: 7, today: true },
+  { label: 'Tue', date: 8, today: false },
+  { label: 'Wed', date: 9, today: false },
+  { label: 'Thu', date: 10, today: false },
+  { label: 'Fri', date: 11, today: true },
+]
 
 const institutes = getInstitutes()
 
-const gradeSheets = getGradeSheets()
-const reviewStudents = getReviewStudents()
+const gradeSheets = ref([])
+const reviewStudents = computed(() => reviewSheet.value?.student_records || [])
+const students = ref([])
+const studentForm = ref({ student_id: '', name: '' })
+
+onMounted(async () => {
+  try {
+    gradeSheets.value = await getGradeSheets()
+    students.value = await getStudents()
+  } catch {
+    gradeSheets.value = []
+    students.value = []
+  }
+})
 
 const summaryCards = computed(() => {
-  const pending = gradeSheets.filter(s => s.status === 'Submitted').length
-  const approved = gradeSheets.filter(s => s.status === 'Approved').length
-  const published = gradeSheets.filter(s => s.status === 'Published').length
+  const pending = gradeSheets.value.filter(s => s.status === 'Submitted').length
+  const approved = gradeSheets.value.filter(s => s.status === 'Approved').length
   return [
     {
       label: 'Pending Review',
       count: pending,
-      note: 'Awaiting your approval',
+      note: 'of 10 Waiting for approval',
       icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 3"></path></svg>`,
     },
     {
       label: 'Approved',
       count: approved,
-      note: 'Ready to publish',
+      note: 'of 10 Ready to publish',
       icon: `<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>`,
-    },
-    {
-      label: 'Published',
-      count: published,
-      note: 'Visible to students',
-      icon: `<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"></path><circle cx="17" cy="13" r="3"></circle><path d="m21 21-2.3-2.3"></path></svg>`,
     },
   ]
 })
 
 const filteredSheets = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return gradeSheets.filter((sheet) => {
+  return gradeSheets.value.filter((sheet) => {
     const matchesStatus = statusFilter.value === 'All Status' || sheet.status === statusFilter.value
     const matchesSearch =
       !query ||
@@ -342,6 +467,40 @@ function selectInstitute(institute) {
 
 function openReview(sheet) {
   reviewSheet.value = sheet
+}
+
+async function changeStatus(status) {
+  if (!reviewSheet.value?.id) return
+
+  try {
+    const updated = await updateGradeSheetStatus(reviewSheet.value.id, status)
+    const index = gradeSheets.value.findIndex(sheet => sheet.id === updated.id)
+    if (index !== -1) gradeSheets.value[index] = updated
+    reviewSheet.value = updated
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Unable to update grade sheet.')
+  }
+}
+
+function toggleCourse(course) {
+  selectedCourses.value = selectedCourses.value.includes(course)
+    ? selectedCourses.value.filter(item => item !== course)
+    : [...selectedCourses.value, course]
+}
+
+function addRelease() {
+  if (selectedCourses.value.length > 0) {
+    releaseForm.value.releasedDate = releaseForm.value.releasedDate
+  }
+}
+
+async function saveStudent() {
+  try {
+    students.value.unshift(await addStudent(studentForm.value))
+    studentForm.value = { student_id: '', name: '' }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Unable to add student.')
+  }
 }
 </script>
 
@@ -683,6 +842,69 @@ function openReview(sheet) {
   padding: 30px 40px 26px;
 }
 
+.calendar-card {
+  min-height: 105px;
+  padding: 8px 10px 5px;
+  border: 1px solid #adadad;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.calendar-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  color: #111111;
+  font-size: 14px;
+}
+
+.calendar-heading button {
+  border: 0;
+  color: #111111;
+  background: transparent;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+}
+
+.calendar-days span {
+  display: flex;
+  min-height: 46px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  color: #111111;
+}
+
+.calendar-days span.today {
+  background: #9ae9b0;
+}
+
+.calendar-days small {
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.calendar-days strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.calendar-month {
+  display: block;
+  margin-top: 3px;
+  color: #111111;
+  font-size: 9px;
+  text-align: center;
+}
+
 .status-card {
   min-height: 142px;
   display: flex;
@@ -745,6 +967,182 @@ function openReview(sheet) {
   border: 1px solid #a9a9a9;
   border-radius: 13px 13px 0 0;
   background: #ffffff;
+}
+
+.release-panel,
+.repository-panel {
+  margin: 0 4px 20px;
+  padding: 0 18px 18px;
+}
+
+.release-panel h3,
+.repository-panel h3 {
+  margin: 0 0 14px;
+  color: #183f2a;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.release-content {
+  min-height: 350px;
+  padding: 16px 14px 18px;
+  border: 1px solid #ababab;
+  border-radius: 13px;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.2);
+}
+
+.release-form {
+  position: relative;
+  width: min(765px, 100%);
+  min-height: 150px;
+  padding: 0 14px 12px;
+  border: 1px solid #d1d1d1;
+  border-radius: 7px;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.15);
+  box-sizing: border-box;
+}
+
+.release-form-title {
+  margin: -1px 0 8px;
+  color: #111111;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.release-fields {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr 0.9fr 1.1fr;
+  gap: 14px;
+}
+
+.release-fields label,
+.course-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  color: #111111;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.release-fields input,
+.release-fields select {
+  width: 100%;
+  height: 29px;
+  padding: 0 8px;
+  border: 1px solid #c9c9c9;
+  border-radius: 5px;
+  color: #333333;
+  background: #ffffff;
+  font-size: 11px;
+  box-sizing: border-box;
+}
+
+.course-field {
+  margin-top: 7px;
+}
+
+.course-field span {
+  color: #777777;
+  font-size: 9px;
+  font-weight: 400;
+}
+
+.course-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.course-chips button {
+  height: 25px;
+  padding: 0 8px;
+  overflow: hidden;
+  border: 1px solid #cfcfcf;
+  border-radius: 5px;
+  color: #222222;
+  background: #ffffff;
+  font-size: 10px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.course-chips button.selected {
+  border-color: #77a586;
+  background: #f0f8f1;
+}
+
+.add-release-button {
+  position: absolute;
+  right: 14px;
+  bottom: 11px;
+  width: 132px;
+  height: 29px;
+  border: 0;
+  border-radius: 5px;
+  color: #ffffff;
+  background: #4d7e5d;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.published-card {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -101px 0 0 805px;
+  width: 200px;
+  height: 62px;
+  padding: 0 11px;
+  border: 1px solid #bdbdbd;
+  border-radius: 10px;
+  background: #ffffff;
+  box-sizing: border-box;
+}
+
+.published-ring {
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  border: 3px solid #d7e6df;
+  border-top-color: #357856;
+  border-radius: 50%;
+}
+
+.published-card > strong {
+  color: #111111;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.published-card b,
+.published-card small {
+  display: block;
+  color: #111111;
+}
+
+.published-card b {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.published-card small {
+  margin-top: 3px;
+  color: #777777;
+  font-size: 8px;
+}
+
+.repository-panel {
+  min-height: 350px;
+}
+
+.repository-panel p {
+  color: #666666;
+  font-size: 14px;
 }
 
 .toolbar {
@@ -1103,6 +1501,91 @@ function openReview(sheet) {
   stroke-linejoin: round;
 }
 
+.registrar-students-box {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #c8d8cc;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.registrar-students-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.registrar-students-heading h3,
+.registrar-students-heading p {
+  margin: 0;
+}
+
+.registrar-students-heading p {
+  margin-top: 4px;
+  color: #66706a;
+  font-size: 12px;
+}
+
+.student-add-row,
+.student-list-header,
+.student-list-row {
+  display: grid;
+  grid-template-columns: 150px minmax(150px, 1fr) 180px 95px;
+  align-items: center;
+  gap: 8px;
+}
+
+.student-list-header {
+  min-height: 34px;
+  padding: 0 4px;
+  color: #245c38;
+  font-size: 11px;
+  letter-spacing: .04em;
+}
+
+.student-add-row input {
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid #aebbb1;
+  border-radius: 4px;
+}
+
+.student-add-row button {
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 4px;
+  background: #287442;
+  color: #fff;
+  cursor: pointer;
+}
+
+.student-list-table {
+  margin-top: 14px;
+  border-top: 1px solid #d8dfda;
+}
+
+.student-list-row {
+  min-height: 38px;
+  padding: 7px 4px;
+  border-bottom: 1px solid #edf0ed;
+}
+
+.student-list-row strong {
+  width: auto;
+}
+
+.student-added-label {
+  color: #287442;
+  font-size: 12px;
+}
+
+.student-list-empty {
+  margin: 12px 0 0;
+  color: #777;
+  font-size: 13px;
+}
+
 @media (max-width: 1020px) {
   .institute-grid,
   .status-grid {
@@ -1164,6 +1647,15 @@ function openReview(sheet) {
     min-height: auto;
   }
 
+  .release-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .published-card {
+    position: static;
+    margin: 18px 0 0;
+  }
+
   .tab-button {
     min-height: 64px;
     border-right: 0;
@@ -1182,6 +1674,14 @@ function openReview(sheet) {
 
   .filter-group {
     justify-content: flex-end;
+  }
+
+  .release-content {
+    min-height: 0;
+  }
+
+  .release-form {
+    width: 100%;
   }
 
   .approval-table-box {
@@ -1242,6 +1742,15 @@ function openReview(sheet) {
 
   .institute-card {
     height: 176px;
+  }
+
+  .release-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .add-release-button {
+    position: static;
+    margin-top: 12px;
   }
 
   .review-top,
