@@ -121,7 +121,7 @@
                 <button type="button" aria-label="Open calendar">...</button>
               </div>
               <div class="calendar-days">
-                <span v-for="day in calendarDays" :key="day.label" :class="{ today: day.today }">
+                <span v-for="day in calendarDays" :key="day.label" :class="{ today: day.today, scheduled: day.scheduled }">
                   <small>{{ day.label }}</small>
                   <strong>{{ day.date }}</strong>
                 </span>
@@ -153,47 +153,51 @@
               </div>
             </div>
 
-            <div class="table-scroll">
-              <table class="approval-table">
-                <thead>
-                  <tr>
-                    <th>CLASS</th>
-                    <th>PROFESSOR</th>
-                    <th>SEMESTER</th>
-                    <th>STUDENTS</th>
-                    <th>DATE<br />SUBMITTED</th>
-                    <th>STATUS</th>
-                    <th>ACTIONS</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="sheet in filteredSheets" :key="sheet.code">
-                    <td>
-                      <strong>{{ sheet.code }}</strong>
-                      <span>{{ sheet.subject }}</span>
-                      <small>{{ sheet.section }}</small>
-                    </td>
-                    <td>{{ sheet.professor }}</td>
-                    <td>{{ sheet.semester }}</td>
-                    <td>{{ sheet.students }}</td>
-                    <td>{{ sheet.submitted }}</td>
-                    <td><span class="submitted-pill">{{ sheet.status }}</span></td>
-                    <td>
-                      <button class="review-button" type="button" @click="openReview(sheet)">
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-                          <circle cx="12" cy="12" r="3" />
-                        </svg>
-                        Review
-                      </button>
-                    </td>
-                  </tr>
-                  <tr v-if="filteredSheets.length === 0">
-                    <td colspan="7" class="empty-cell">No grade sheets found.</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <section v-for="year in yearSections" :key="year.label" class="year-section" :class="{ expanded: expandedYears.includes(year.label) }">
+              <button class="year-heading" type="button" @click="toggleYear(year.label)">
+                <strong><span class="year-chevron">{{ expandedYears.includes(year.label) ? '&#8964;' : '&#8250;' }}</span>{{ year.label }}</strong>
+                <span>{{ year.sheets.length }} submission(s)</span>
+              </button>
+              <div v-if="expandedYears.includes(year.label)" class="table-scroll">
+                <table class="approval-table">
+                  <thead>
+                    <tr>
+                      <th>SEM</th>
+                      <th>DATE SUBMITTED</th>
+                      <th>PROFESSOR</th>
+                      <th>COURSE</th>
+                      <th>SECTION</th>
+                      <th>STUDENTS</th>
+                      <th>STATUS</th>
+                      <th>ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="sheet in year.sheets" :key="sheet.id || `${sheet.code}-${sheet.section}`">
+                      <td>{{ semesterNumber(sheet.semester) }}</td>
+                      <td>{{ sheet.submitted }}</td>
+                      <td>{{ sheet.professor }}</td>
+                      <td><strong>{{ sheet.code }}</strong></td>
+                      <td>{{ sheet.section }}</td>
+                      <td>{{ sheet.students }}</td>
+                      <td><span class="submitted-pill">{{ sheet.status }}</span></td>
+                      <td>
+                        <button class="review-button" type="button" @click="openReview(sheet)">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          Review
+                        </button>
+                      </td>
+                    </tr>
+                    <tr v-if="year.sheets.length === 0">
+                      <td colspan="8" class="empty-cell">No grade sheets found.</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </section>
           </div>
 
           <section v-if="activeTab === 'approval'" class="registrar-students-box">
@@ -277,6 +281,64 @@
                   <small>of 10 Ready to publish</small>
                 </div>
               </article>
+            </div>
+
+            <div class="release-year-list">
+              <section v-for="year in releaseYearSections" :key="year.label" class="release-year-section">
+                <button class="release-year-heading" type="button" @click="toggleReleaseYear(year.label)">
+                  <span class="year-chevron">{{ expandedReleaseYears.includes(year.label) ? '&#8964;' : '&#8250;' }}</span>
+                  <strong>{{ year.label }}</strong>
+                </button>
+                <div v-if="expandedReleaseYears.includes(year.label)" class="release-schedule-table">
+                  <div class="release-schedule-row release-schedule-header">
+                    <strong>School Year</strong>
+                    <strong>Semester</strong>
+                    <strong>Year Level</strong>
+                    <strong>Course</strong>
+                    <strong>Released Date</strong>
+                    <strong>Status</strong>
+                    <strong>Action</strong>
+                  </div>
+                  <div v-for="schedule in year.schedules" :key="schedule.id" class="release-schedule-row">
+                    <span>{{ schedule.schoolYear }}</span>
+                    <span>{{ schedule.semester }}</span>
+                    <span>{{ schedule.yearLevel }}</span>
+                    <span class="schedule-courses">
+                      <small v-for="course in schedule.courses" :key="course">{{ course }}</small>
+                    </span>
+                    <span>{{ schedule.releasedDate || '-' }}</span>
+                    <span><b class="schedule-status" :class="schedule.status.toLowerCase()">{{ schedule.status }}</b></span>
+                    <span>
+                      <button v-if="schedule.status === 'Scheduled'" class="release-now-button" type="button" @click="releaseNow(schedule)">Release Now</button>
+                      <span v-else class="released-label">Released</span>
+                    </span>
+                  </div>
+                  <p v-if="year.schedules.length === 0" class="release-empty">No release schedule added.</p>
+                </div>
+              </section>
+            </div>
+
+            <h3 class="period-title">Grade Period Setting</h3>
+            <div class="period-content">
+              <form class="period-form" @submit.prevent="saveGradePeriod">
+                <p class="period-form-title">&#128197; Schedule New Grade Period</p>
+                <div class="period-fields">
+                  <label>School Year<input v-model="periodForm.schoolYear" type="text" /></label>
+                  <label>Semester<select v-model="periodForm.semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select></label>
+                  <label>Midterm Opens On<input v-model="periodForm.midtermOpens" type="date" /></label>
+                  <label>Finals Opens On<input v-model="periodForm.finalsOpens" type="date" /></label>
+                  <button class="save-period-button" type="submit">&#128190; Save Sched</button>
+                </div>
+              </form>
+              <section class="active-schedules">
+                <h4>Active Schedules</h4>
+                <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
+                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm: {{ period.midtermOpens || '-' }} &nbsp;|&nbsp; Finals: {{ period.finalsOpens || '-' }}</small></div>
+                  <span class="period-state">Midterm Open</span>
+                  <span class="period-state locked">Finals Locked</span>
+                </div>
+                <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
+              </section>
             </div>
           </div>
 
@@ -380,7 +442,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { addStudent, getGradeSheets, getInstitutes, getStudents, updateGradeSheetStatus } from '../services/dataService'
+import { addStudent, createGradePeriod, createGradeSchedule, getGradeSchedules, getGradeSheets, getInstitutes, getStudents, releaseGradeSchedule, updateGradeSheetStatus } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
 const props = defineProps({ user: { type: Object, default: null } })
@@ -392,6 +454,7 @@ const search = ref('')
 const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
 const activeTab = ref('approval')
+const expandedYears = ref(['1st Year'])
 const publishedCount = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Published').length)
 const courses = ['BSBA HRM - Business Administration', 'BS Entrep - Entrepreneurship']
 const selectedCourses = ref([...courses])
@@ -401,29 +464,42 @@ const releaseForm = ref({
   yearLevel: 'Year',
   releasedDate: '',
 })
-const calendarDays = [
-  { label: 'Mon', date: 7, today: true },
-  { label: 'Tue', date: 8, today: false },
-  { label: 'Wed', date: 9, today: false },
-  { label: 'Thu', date: 10, today: false },
-  { label: 'Fri', date: 11, today: true },
-]
-
+const expandedReleaseYears = ref(['A.Y 2025 - 2026'])
+const periodForm = ref({
+  schoolYear: '2025-2026',
+  semester: 'Semester',
+  midtermOpens: '',
+  finalsOpens: '',
+})
+const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
 const institutes = getInstitutes()
 
 const gradeSheets = ref([])
+const schedules = ref([])
 const reviewStudents = computed(() => reviewSheet.value?.student_records || [])
 const students = ref([])
 const studentForm = ref({ student_id: '', name: '' })
 
 onMounted(async () => {
   try {
-    gradeSheets.value = await getGradeSheets()
-    students.value = await getStudents()
+    ;[gradeSheets.value, students.value, schedules.value] = await Promise.all([getGradeSheets(), getStudents(), getGradeSchedules()])
   } catch {
     gradeSheets.value = []
     students.value = []
+    schedules.value = []
   }
+})
+
+const calendarDays = computed(() => {
+  const today = new Date()
+  const start = new Date(today)
+  start.setDate(today.getDate() - ((today.getDay() + 6) % 7))
+  return Array.from({ length: 5 }, (_, index) => {
+    const date = new Date(start)
+    date.setDate(start.getDate() + index)
+    const dateValue = date.toISOString().slice(0, 10)
+    return { label: date.toLocaleDateString('en-US', { weekday: 'short' }), date: date.getDate(), today: dateValue === today.toISOString().slice(0, 10), scheduled: schedules.value.some(schedule => schedule.releasedDate === dateValue) }
+  })
 })
 
 const summaryCards = computed(() => {
@@ -460,6 +536,35 @@ const filteredSheets = computed(() => {
   })
 })
 
+const yearSections = computed(() => [1, 2, 3, 4].map(year => ({
+  label: `${year}${year === 1 ? 'st' : year === 2 ? 'nd' : year === 3 ? 'rd' : 'th'} Year`,
+  sheets: filteredSheets.value.filter(sheet => new RegExp(`(^|[- ])${year}[A-D]?($|[- ])`, 'i').test(sheet.section)),
+})))
+
+const releaseYearSections = computed(() => {
+  const schoolYears = [...new Set([...schedules.value.filter(schedule => schedule.yearLevel !== 'Grade Period').map(schedule => schedule.schoolYear)])]
+  return schoolYears.map(schoolYear => ({
+    label: `A.Y ${schoolYear.replace('-', ' - ')}`,
+    schedules: schedules.value.filter(schedule => schedule.schoolYear === schoolYear && schedule.yearLevel !== 'Grade Period'),
+  }))
+})
+
+function semesterNumber(semester) {
+  return semester?.toLowerCase().includes('2nd') ? '2' : '1'
+}
+
+function toggleYear(label) {
+  expandedYears.value = expandedYears.value.includes(label)
+    ? expandedYears.value.filter(year => year !== label)
+    : [...expandedYears.value, label]
+}
+
+function toggleReleaseYear(label) {
+  expandedReleaseYears.value = expandedReleaseYears.value.includes(label)
+    ? expandedReleaseYears.value.filter(year => year !== label)
+    : [...expandedReleaseYears.value, label]
+}
+
 function selectInstitute(institute) {
   selectedInstitute.value = institute
   currentView.value = 'management'
@@ -489,9 +594,34 @@ function toggleCourse(course) {
 }
 
 function addRelease() {
-  if (selectedCourses.value.length > 0) {
-    releaseForm.value.releasedDate = releaseForm.value.releasedDate
-  }
+  if (!selectedCourses.value.length || releaseForm.value.yearLevel === 'Year' || releaseForm.value.semester === 'Semester') return
+
+  createGradeSchedule({
+    schoolYear: releaseForm.value.schoolYear,
+    semester: releaseForm.value.semester,
+    yearLevel: releaseForm.value.yearLevel,
+    courses: [...selectedCourses.value],
+    releasedDate: releaseForm.value.releasedDate,
+  }).then(schedule => {
+    schedules.value.unshift(schedule)
+    const label = `A.Y ${schedule.schoolYear.replace('-', ' - ')}`
+    if (!expandedReleaseYears.value.includes(label)) expandedReleaseYears.value.push(label)
+  }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to add release schedule.'))
+}
+
+function releaseNow(schedule) {
+  if (!schedule.id) return
+  releaseGradeSchedule(schedule.id).then(updated => {
+    const index = schedules.value.findIndex(item => item.id === updated.id)
+    if (index !== -1) schedules.value[index] = updated
+  }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to release schedule.'))
+}
+
+function saveGradePeriod() {
+  if (periodForm.value.semester === 'Semester') return
+  createGradePeriod(periodForm.value).then(schedule => {
+    schedules.value.unshift(schedule)
+  }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to save grade period.'))
 }
 
 async function saveStudent() {
@@ -887,6 +1017,10 @@ async function saveStudent() {
   background: #9ae9b0;
 }
 
+.calendar-days span.scheduled {
+  box-shadow: inset 0 -3px 0 #2d6d48;
+}
+
 .calendar-days small {
   font-size: 9px;
   font-weight: 700;
@@ -967,6 +1101,48 @@ async function saveStudent() {
   border: 1px solid #a9a9a9;
   border-radius: 13px 13px 0 0;
   background: #ffffff;
+}
+
+.year-section + .year-section {
+  border-top: 1px solid #bdbdbd;
+}
+
+.year-heading {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 54px;
+  padding: 0 16px;
+  border: 0;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.year-heading strong {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #b7b7b7;
+  border-radius: 6px;
+  color: #111111;
+  font-size: 16px;
+}
+
+.year-chevron {
+  display: inline-block;
+  width: 18px;
+  margin-right: 2px;
+  font-size: 22px;
+  line-height: 1;
+  text-align: center;
+}
+
+.year-heading span {
+  color: #555555;
+  font-size: 14px;
 }
 
 .release-panel,
@@ -1136,6 +1312,217 @@ async function saveStudent() {
   font-size: 8px;
 }
 
+.release-year-list {
+  display: grid;
+  gap: 16px;
+  margin: 18px 2px 24px;
+}
+
+.release-year-section {
+  overflow: hidden;
+  border: 1px solid #b8b8b8;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.release-year-heading {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border: 0;
+  background: #ffffff;
+  color: #111111;
+  font-size: 20px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.release-year-heading .year-chevron {
+  margin: 0;
+}
+
+.release-schedule-table {
+  overflow-x: auto;
+  padding: 0 12px 10px;
+}
+
+.release-schedule-row {
+  min-width: 970px;
+  display: grid;
+  grid-template-columns: 1.05fr 0.8fr 0.85fr 1.55fr 1.05fr 0.9fr 0.9fr;
+  align-items: center;
+  min-height: 52px;
+  border-top: 1px solid #c6c6c6;
+  color: #111111;
+  font-size: 14px;
+  text-align: center;
+}
+
+.release-schedule-row > * {
+  padding: 5px 8px;
+}
+
+.release-schedule-header {
+  min-height: 44px;
+  color: #111111;
+  font-size: 14px;
+}
+
+.schedule-courses {
+  display: flex;
+  justify-content: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.schedule-courses small {
+  padding: 4px 8px;
+  border: 1px solid #bdbdbd;
+  border-radius: 999px;
+  background: #ffffff;
+  white-space: nowrap;
+}
+
+.schedule-status {
+  display: inline-block;
+  padding: 4px 11px;
+  border-radius: 999px;
+  background: #ffe7a2;
+  font-weight: 400;
+}
+
+.schedule-status.released {
+  background: #bdf7d0;
+}
+
+.release-now-button,
+.save-period-button {
+  border: 0;
+  border-radius: 5px;
+  background: #3d704d;
+  color: #ffffff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.release-now-button {
+  padding: 7px 10px;
+}
+
+.released-label {
+  color: #999999;
+}
+
+.release-empty {
+  margin: 12px 0 4px;
+  color: #777777;
+  font-size: 13px;
+  text-align: center;
+}
+
+.period-title {
+  margin: 16px 0 16px;
+  color: #183f2a;
+  font-size: 25px;
+}
+
+.period-content {
+  display: grid;
+  gap: 14px;
+}
+
+.period-form,
+.active-schedules {
+  padding: 14px 16px;
+  border: 1px solid #c9c9c9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 2px rgba(0, 0, 0, 0.12);
+}
+
+.period-form-title {
+  margin: 0 0 14px;
+  color: #111111;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.period-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.25fr 1.25fr auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.period-fields label {
+  display: grid;
+  gap: 5px;
+  color: #111111;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.period-fields input,
+.period-fields select {
+  height: 34px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 1px solid #c9c9c9;
+  border-radius: 5px;
+  background: #ffffff;
+  color: #555555;
+}
+
+.save-period-button {
+  height: 34px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.active-schedules h4 {
+  margin: 0 0 10px;
+  color: #111111;
+  font-size: 16px;
+}
+
+.active-schedule-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: 1px solid #dddddd;
+  border-radius: 6px;
+}
+
+.active-schedule-row strong,
+.active-schedule-row small {
+  display: block;
+}
+
+.active-schedule-row small {
+  margin-top: 4px;
+  color: #777777;
+  font-size: 11px;
+}
+
+.period-state {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #5b8f67;
+  color: #ffffff;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.period-state.locked {
+  background: #dddddd;
+  color: #111111;
+}
+
 .repository-panel {
   min-height: 350px;
 }
@@ -1222,46 +1609,29 @@ async function saveStudent() {
 
 .approval-table {
   width: 100%;
-  min-width: 950px;
+  min-width: 1040px;
   border-collapse: collapse;
 }
 
 .approval-table th {
-  height: 65px;
+  height: 52px;
   padding: 8px 16px;
   background: #a9f3bf;
   color: #102516;
-  font-size: 18px;
+  font-size: 15px;
   line-height: 1.2;
   font-weight: 900;
   text-align: center;
 }
 
 .approval-table td {
-  height: 79px;
-  padding: 10px 16px;
+  height: 58px;
+  padding: 8px 12px;
   border-top: 1px solid #bdbdbd;
   color: #000000;
-  font-size: 16px;
+  font-size: 15px;
   text-align: center;
   vertical-align: middle;
-}
-
-.approval-table td:first-child {
-  line-height: 1.1;
-}
-
-.approval-table td:first-child strong,
-.approval-table td:first-child span,
-.approval-table td:first-child small {
-  display: block;
-}
-
-.approval-table td:first-child small {
-  margin-top: 3px;
-  color: #285231;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .submitted-pill,
@@ -1273,7 +1643,7 @@ async function saveStudent() {
   border-radius: 999px;
   background: #d9d9d9;
   color: #000000;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 400;
 }
 
@@ -1287,7 +1657,7 @@ async function saveStudent() {
   border-radius: 7px;
   background: #bce8ed;
   color: #226f7c;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
 }
 

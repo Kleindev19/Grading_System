@@ -10,7 +10,7 @@ class StudentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can manage students.');
+        abort_unless(in_array($request->attributes->get('auth_user')->role, ['registrar', 'professor'], true), 403, 'Only registrars and professors can view students.');
 
         return response()->json(['students' => Student::latest()->get(['id', 'student_id', 'name'])]);
     }

@@ -141,16 +141,16 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="p in filteredPublished" :key="p.code">
+                <tr v-for="p in filteredPublished" :key="p.id || p.code">
                   <td class="code" data-label="SUBJECT CODE">{{ p.code }}</td>
                   <td data-label="DESCRIPTION">{{ p.subject }}</td>
                   <td data-label="PROFESSOR">{{ p.professor }}</td>
-                  <td data-label="MIDTERM 40%">-</td>
-                  <td data-label="FINALS 60%">-</td>
-                  <td data-label="FINAL AVERAGE">-</td>
-                  <td class="grade-point" data-label="GRADE POINT">-</td>
+                  <td data-label="MIDTERM 40%">{{ p.student_records?.[0]?.midterm || '-' }}</td>
+                  <td data-label="FINALS 60%">{{ p.student_records?.[0]?.finals || '-' }}</td>
+                  <td data-label="FINAL AVERAGE">{{ p.student_records?.[0]?.finalGrade || '-' }}</td>
+                  <td class="grade-point" data-label="GRADE POINT">{{ p.student_records?.[0]?.gradePoint || '-' }}</td>
                   <td data-label="REMARKS">
-                    <span class="pill passed">Published</span>
+                    <span class="pill passed">{{ p.student_records?.[0]?.remarks || 'Published' }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -183,14 +183,28 @@ const publishedGrades = ref([])
 onMounted(async () => {
   try {
     publishedGrades.value = await getPublishedGrades()
+    const records = publishedGrades.value.flatMap(sheet => sheet.student_records || [])
+    enrolledSubjects.value = publishedGrades.value.length
+    studentStatus.value = publishedGrades.value.length ? 'Active' : 'No records'
+    totalUnits.value = publishedGrades.value.length
+    const gradePoints = records.map(record => Number(record.gradePoint)).filter(Number.isFinite)
+    gwa.value = gradePoints.length
+      ? (gradePoints.reduce((total, point) => total + point, 0) / gradePoints.length).toFixed(2)
+      : '-'
   } catch {
     publishedGrades.value = []
+    enrolledSubjects.value = 0
+    studentStatus.value = 'No records'
+    totalUnits.value = 0
+    gwa.value = '-'
   }
 })
 
-const filteredPublished = computed(()=> publishedGrades.value.filter(p =>
-  !searchPublished.value || p.code.toLowerCase().includes(searchPublished.value.toLowerCase()) || p.subject.toLowerCase().includes(searchPublished.value.toLowerCase())
-))
+const filteredPublished = computed(() => publishedGrades.value.filter(p => {
+  const matchesSemester = !semester.value || p.semester.toLowerCase().includes(semester.value.split(' ')[0].toLowerCase())
+  const query = searchPublished.value.toLowerCase()
+  return matchesSemester && (!query || p.code.toLowerCase().includes(query) || p.subject.toLowerCase().includes(query))
+}))
 
 function signOut(){
 	window.location.replace(window.location.pathname)

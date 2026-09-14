@@ -35,6 +35,19 @@ export interface StudentRecord {
   finalGrade?: string
   gradePoint?: string
   remarks?: string
+  scores?: Record<string, string>
+}
+
+export interface GradeSchedule {
+  id?: number
+  schoolYear: string
+  semester: string
+  yearLevel: string
+  courses: string[]
+  releasedDate?: string
+  status: 'Scheduled' | 'Released'
+  midtermOpens?: string
+  finalsOpens?: string
 }
 
 export interface Student {
@@ -82,6 +95,11 @@ function authHeaders(): HeadersInit {
   return token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' }
 }
 
+export function apiUrl(path: string): string {
+  const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
+  return `${baseUrl}/api${path}`
+}
+
 export async function parseApiResponse<T>(response: Response): Promise<T> {
   const body = await response.text()
 
@@ -99,7 +117,7 @@ export async function parseApiResponse<T>(response: Response): Promise<T> {
 }
 
 async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, {
+  const response = await fetch(apiUrl(path), {
     ...options,
     headers: { 'Content-Type': 'application/json', ...authHeaders(), ...(options.headers || {}) },
   })
@@ -132,6 +150,32 @@ export async function updateGradeSheetStatus(id: number, status: GradeSheet['sta
 export async function getPublishedGrades(): Promise<GradeSheet[]> {
   const payload = await apiRequest<{ grade_sheets: GradeSheet[] }>('/published-grades')
   return payload.grade_sheets
+}
+
+export async function getGradeSchedules(): Promise<GradeSchedule[]> {
+  const payload = await apiRequest<{ schedules: GradeSchedule[] }>('/grade-schedules')
+  return payload.schedules
+}
+
+export async function createGradeSchedule(schedule: Omit<GradeSchedule, 'id' | 'status'>): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>('/grade-schedules', {
+    method: 'POST',
+    body: JSON.stringify(schedule),
+  })
+  return payload.schedule
+}
+
+export async function releaseGradeSchedule(id: number): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-schedules/${id}/release`, { method: 'PATCH' })
+  return payload.schedule
+}
+
+export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens?: string; finalsOpens?: string }): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>('/grade-periods', {
+    method: 'POST',
+    body: JSON.stringify(period),
+  })
+  return payload.schedule
 }
 
 export async function getStudents(): Promise<Student[]> {

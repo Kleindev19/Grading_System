@@ -38,6 +38,12 @@ class GradeSheetController extends Controller
             'student_records' => ['sometimes', 'array'],
             'student_records.*.id' => ['required', 'string', 'max:80'],
             'student_records.*.name' => ['required', 'string', 'max:255'],
+            'student_records.*.midterm' => ['nullable', 'string', 'max:40'],
+            'student_records.*.finals' => ['nullable', 'string', 'max:40'],
+            'student_records.*.finalGrade' => ['nullable', 'string', 'max:40'],
+            'student_records.*.gradePoint' => ['nullable', 'string', 'max:40'],
+            'student_records.*.remarks' => ['nullable', 'string', 'max:255'],
+            'student_records.*.scores' => ['sometimes', 'array'],
         ]);
 
         $sheet = GradeSheet::updateOrCreate(
@@ -49,6 +55,12 @@ class GradeSheetController extends Controller
         $sheet->studentsList()->createMany(array_map(fn (array $student): array => [
             'student_id' => $student['id'],
             'name' => $student['name'],
+            'midterm' => $student['midterm'] ?? null,
+            'finals' => $student['finals'] ?? null,
+            'final_grade' => $student['finalGrade'] ?? null,
+            'grade_point' => $student['gradePoint'] ?? null,
+            'remarks' => $student['remarks'] ?? null,
+            'assessment_scores' => $student['scores'] ?? null,
         ], $data['student_records'] ?? []));
 
         return response()->json(['grade_sheet' => $this->serialize($sheet->load('professor:id,name', 'studentsList'))], 201);
@@ -79,11 +91,20 @@ class GradeSheetController extends Controller
         $user = $request->attributes->get('auth_user');
         abort_unless($user->role === 'student', 403, 'Only students can view published grades.');
 
-        return response()->json(['grade_sheets' => GradeSheet::with('professor:id,name')->where('status', 'Published')->latest()->get()->map(fn (GradeSheet $sheet) => $this->serialize($sheet))]);
+        $studentId = $user->student_id ?: $user->username;
+        return response()->json(['grade_sheets' => GradeSheet::with('professor:id,name', 'studentsList')
+            ->where('status', 'Published')
+            ->whereHas('studentsList', fn ($query) => $query->where('student_id', $studentId))
+            ->latest()->get()->map(fn (GradeSheet $sheet) => $this->serialize($sheet, $studentId))]);
     }
 
-    private function serialize(GradeSheet $sheet): array
+    private function serialize(GradeSheet $sheet, ?string $studentId = null): array
     {
+        $records = $sheet->studentsList;
+        if ($studentId) {
+            $records = $records->where('student_id', $studentId)->values();
+        }
+
         return [
             'id' => $sheet->id,
             'code' => $sheet->code,
@@ -98,7 +119,7 @@ class GradeSheetController extends Controller
             'reviewed_by' => $sheet->reviewed_by,
             'reviewed_at' => $sheet->reviewed_at?->toISOString(),
             'rejection_reason' => $sheet->rejection_reason,
-            'student_records' => $sheet->studentsList->map(fn ($student) => [
+            'student_records' => $records->map(fn ($student) => [
                 'id' => $student->student_id,
                 'name' => $student->name,
                 'midterm' => $student->midterm ?? '',
@@ -106,6 +127,7 @@ class GradeSheetController extends Controller
                 'finalGrade' => $student->final_grade ?? '',
                 'gradePoint' => $student->grade_point ?? '',
                 'remarks' => $student->remarks ?? '',
+                'scores' => $student->assessment_scores ?? [],
             ])->values(),
         ];
     }

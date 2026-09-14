@@ -1,6 +1,6 @@
 <template>
   <StudentDashboard v-if="user?.role === 'student'" :user="user" @signout="logout" />
-  <ProfessorDashboard v-else-if="user?.role === 'professor'" :user="user" @signout="logout" @submitted="goToRegistrar" />
+  <ProfessorDashboard v-else-if="user?.role === 'professor'" :user="user" @signout="logout" />
   <RegistarDashboard v-else-if="user?.role === 'registrar'" :user="user" @signout="logout" />
 
   <main v-else class="auth-page">
@@ -62,6 +62,10 @@
             <option value="registrar">Registrar</option>
           </select>
         </label>
+        <label v-if="mode === 'register' && form.role === 'student'">
+          Student ID
+          <input v-model.trim="form.student_id" type="text" required />
+        </label>
         <label>
           Password
           <span class="input-wrap">
@@ -94,7 +98,7 @@
 
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
-import { parseApiResponse } from '../services/dataService'
+import { apiUrl, parseApiResponse } from '../services/dataService'
 import StudentDashboard from './StudentDashboard.vue'
 import ProfessorDashboard from './ProfessorDashboard.vue'
 import RegistarDashboard from './RegistarDashboard.vue'
@@ -114,6 +118,7 @@ const form = reactive({
   password: '',
   password_confirmation: '',
   role: 'student',
+  student_id: '',
 })
 
 function switchMode(nextMode) {
@@ -126,14 +131,17 @@ function switchMode(nextMode) {
 async function submitAuth() {
   loading.value = true
   errorMessage.value = ''
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), 10000)
 
   try {
-    const response = await fetch(`/api/${mode.value}`, {
+    const response = await fetch(apiUrl(`/${mode.value}`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(mode.value === 'login'
         ? { username: form.username, password: form.password }
         : form),
+      signal: controller.signal,
     })
     const payload = await parseApiResponse(response)
 
@@ -149,8 +157,11 @@ async function submitAuth() {
 
     completeLogin(payload)
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : 'Unable to connect to the server.'
+    errorMessage.value = error instanceof DOMException && error.name === 'AbortError'
+      ? 'The server took too long to respond. Please try again or use DEV ACCESS.'
+      : error instanceof Error ? error.message : 'Unable to connect to the server.'
   } finally {
+    window.clearTimeout(timeout)
     loading.value = false
   }
 }
@@ -159,7 +170,7 @@ async function verifyEmail() {
   loading.value = true
   errorMessage.value = ''
   try {
-    const response = await fetch('/api/verify-email', {
+    const response = await fetch(apiUrl('/verify-email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ email: verificationEmail.value, code: verificationCode.value }),
@@ -196,7 +207,7 @@ async function restoreSession() {
   if (!token) return
 
   try {
-    const response = await fetch('/api/me', { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
+    const response = await fetch(apiUrl('/me'), { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } })
     if (!response.ok) throw new Error('Session expired.')
     user.value = (await parseApiResponse<{ user: typeof user.value }>(response)).user
   } catch {
@@ -207,16 +218,12 @@ async function restoreSession() {
 async function logout() {
   const token = localStorage.getItem('auth_token')
   if (token) {
-    await fetch('/api/logout', { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).catch(() => {})
+    await fetch(apiUrl('/logout'), { method: 'POST', headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } }).catch(() => {})
   }
   localStorage.removeItem('auth_token')
   user.value = null
   verificationRequired.value = false
   switchMode('login')
-}
-
-function goToRegistrar() {
-  user.value = { ...user.value, role: 'registrar' }
 }
 
 function resetForm() {
@@ -226,6 +233,7 @@ function resetForm() {
   form.password = ''
   form.password_confirmation = ''
   form.role = 'student'
+  form.student_id = ''
 }
 
 onMounted(restoreSession)

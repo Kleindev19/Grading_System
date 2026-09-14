@@ -15,7 +15,13 @@ class GradeSheetStudent extends Model
         'final_grade',
         'grade_point',
         'remarks',
+        'assessment_scores',
     ];
+
+    protected function casts(): array
+    {
+        return ['assessment_scores' => 'array'];
+    }
 
     public function gradeSheet(): BelongsTo
     {

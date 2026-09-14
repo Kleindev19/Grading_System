@@ -20,6 +20,7 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'in:student,professor,registrar'],
+            'student_id' => ['required_if:role,student', 'nullable', 'string', 'max:80', 'unique:users,student_id'],
         ]);
 
         $user = User::create([
@@ -28,6 +29,7 @@ class AuthController extends Controller
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'role' => $data['role'],
+            'student_id' => $data['role'] === 'student' ? ($data['student_id'] ?? null) : null,
             'api_token' => Str::random(60),
         ]);
 
