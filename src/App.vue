@@ -28,7 +28,8 @@ async function openDevDashboard(role: 'student' | 'professor' | 'registrar') {
     localStorage.setItem('auth_token', payload.token)
     devRole.value = role
   } catch (error) {
-    window.alert(error instanceof Error ? error.message : 'Unable to open development dashboard.')
+    localStorage.removeItem('auth_token')
+    devRole.value = role
   } finally {
     devLoading.value = false
   }
@@ -45,9 +46,9 @@ function closeDevDashboard() {
   <RegistarDashboard v-else-if="devRole === 'registrar'" :user="devUser.registrar" @signout="closeDevDashboard" />
   <div v-else class="app-shell">
     <HelloWorld />
-    <aside v-if="isDev" class="dev-access" aria-label="Development dashboard access">
-      <strong>DEV ACCESS</strong>
-      <span>Open a dashboard without logging in</span>
+    <aside v-if="isDev" class="dev-access" aria-label="Mock role access">
+      <strong>MOCK ACCESS</strong>
+      <span>Open the system by role without manual login</span>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('student')">Student</button>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('professor')">Professor</button>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('registrar')">Registrar</button>
