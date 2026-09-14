@@ -6,7 +6,6 @@ import RegistarDashboard from './widgets/RegistarDashboard.vue'
 import { ref } from 'vue'
 import { apiUrl, parseApiResponse } from './services/dataService'
 
-const isDev = import.meta.env.DEV
 const devRole = ref<'student' | 'professor' | 'registrar' | null>(null)
 const devLoading = ref(false)
 const devUser = {
@@ -46,8 +45,8 @@ function closeDevDashboard() {
   <RegistarDashboard v-else-if="devRole === 'registrar'" :user="devUser.registrar" @signout="closeDevDashboard" />
   <div v-else class="app-shell">
     <HelloWorld />
-    <aside v-if="isDev" class="dev-access" aria-label="Mock role access">
-      <strong>MOCK ACCESS</strong>
+    <aside class="dev-access" aria-label="Demo role access">
+      <strong>DEMO ACCESS</strong>
       <span>Open the system by role without manual login</span>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('student')">Student</button>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('professor')">Professor</button>
