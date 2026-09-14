@@ -83,6 +83,10 @@ class GradeSheetController extends Controller
             'rejection_reason' => $data['rejection_reason'] ?? null,
         ])->save();
 
+        if ($data['status'] === 'Published') {
+            $gradeSheet->refresh();
+        }
+
         return response()->json(['grade_sheet' => $this->serialize($gradeSheet->fresh()->load('professor:id,name'))]);
     }
 
@@ -92,11 +96,20 @@ class GradeSheetController extends Controller
         abort_unless($user->role === 'student', 403, 'Only students can view published grades.');
 
         $studentId = $user->student_id ?: $user->username;
-        return response()->json(['grade_sheets' => GradeSheet::with('professor:id,name', 'studentsList')
-            ->where('status', 'Published')
-            ->whereHas('studentsList', fn ($query) => $query->where('student_id', $studentId))
-            ->latest()->get()->map(fn (GradeSheet $sheet) => $this->serialize($sheet, $studentId))]);
+
+        return response()->json([
+            'grade_sheets' => GradeSheet::with('professor:id,name', 'studentsList')
+                ->whereIn('status', ['Published', 'Released'])
+                ->whereHas('studentsList', function ($query) use ($studentId, $user) {
+                    $query->where('student_id', $studentId)
+                        ->orWhere('student_id', $user->username);
+                })
+                ->latest()
+                ->get()
+                ->map(fn (GradeSheet $sheet) => $this->serialize($sheet, $studentId))
+        ]);
     }
+
 
     private function serialize(GradeSheet $sheet, ?string $studentId = null): array
     {

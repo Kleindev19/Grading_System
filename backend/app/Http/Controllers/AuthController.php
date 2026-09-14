@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Models\Student;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -20,7 +21,17 @@ class AuthController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:users,email'],
             'password' => ['required', 'string', 'min:8', 'confirmed'],
             'role' => ['required', 'in:student,professor,registrar'],
-            'student_id' => ['required_if:role,student', 'nullable', 'string', 'max:80', 'unique:users,student_id'],
+            'student_id' => [
+                'required_if:role,student',
+                'nullable',
+                'string',
+                'max:80',
+                Rule::when($request->input('role') === 'student', ['unique:users,student_id']),
+            ],
+            'institute' => ['required_if:role,student', 'nullable', 'string', 'in:ICS,IBE,ITE'],
+            'course' => ['required_if:role,student', 'nullable', 'string', 'max:255'],
+            'year_level' => ['required_if:role,student', 'nullable', 'string', 'in:1st Year,2nd Year,3rd Year,4th Year'],
+            'section' => ['required_if:role,student', 'nullable', 'string', 'max:1', 'in:A,B,C,D'],
         ]);
 
         $user = User::create([
@@ -32,6 +43,20 @@ class AuthController extends Controller
             'student_id' => $data['role'] === 'student' ? ($data['student_id'] ?? null) : null,
             'api_token' => Str::random(60),
         ]);
+
+        if ($user->role === 'student') {
+            Student::updateOrCreate(
+                ['student_id' => $user->student_id],
+                [
+                    'name' => $user->name,
+                    'institute' => $data['institute'],
+                    'course' => $data['course'],
+                    'year_level' => $data['year_level'],
+                    'section' => strtoupper($data['section']),
+                    'created_by' => $user->id,
+                ],
+            );
+        }
 
         $code = (string) random_int(100000, 999999);
         $user->verificationCodes()->create([

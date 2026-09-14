@@ -66,6 +66,33 @@
           Student ID
           <input v-model.trim="form.student_id" type="text" required />
         </label>
+        <label v-if="mode === 'register' && form.role === 'student'">
+          Institute
+          <select v-model="form.institute" required>
+            <option value="">Select institute</option>
+            <option value="ICS">ICS - Institute of Computing Studies</option>
+            <option value="IBE">IBE - Institute of Business Entrepreneurship</option>
+            <option value="ITE">ITE - Institute of Teachers Education</option>
+          </select>
+        </label>
+        <label v-if="mode === 'register' && form.role === 'student'">
+          Course
+          <input v-model.trim="form.course" type="text" placeholder="e.g. BSIT" required />
+        </label>
+        <label v-if="mode === 'register' && form.role === 'student'">
+          Year Level
+          <select v-model="form.year_level" required>
+            <option value="">Select year level</option>
+            <option v-for="year in yearLevels" :key="year" :value="year">{{ year }}</option>
+          </select>
+        </label>
+        <label v-if="mode === 'register' && form.role === 'student'">
+          Section
+          <select v-model="form.section" required>
+            <option value="">Select section</option>
+            <option v-for="section in sections" :key="section" :value="section">{{ section }}</option>
+          </select>
+        </label>
         <label>
           Password
           <span class="input-wrap">
@@ -111,6 +138,8 @@ const user = ref(null)
 const verificationRequired = ref(false)
 const verificationEmail = ref('')
 const verificationCode = ref('')
+const sections = ['A', 'B', 'C', 'D']
+const yearLevels = ['1st Year', '2nd Year', '3rd Year', '4th Year']
 const form = reactive({
   name: '',
   username: '',
@@ -119,6 +148,10 @@ const form = reactive({
   password_confirmation: '',
   role: 'student',
   student_id: '',
+  institute: '',
+  course: '',
+  year_level: '',
+  section: '',
 })
 
 function switchMode(nextMode) {
@@ -140,7 +173,9 @@ async function submitAuth() {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify(mode.value === 'login'
         ? { username: form.username, password: form.password }
-        : form),
+        : form.role === 'student'
+          ? form
+          : { ...form, student_id: undefined }),
       signal: controller.signal,
     })
     const payload = await parseApiResponse(response)
@@ -234,6 +269,10 @@ function resetForm() {
   form.password_confirmation = ''
   form.role = 'student'
   form.student_id = ''
+  form.institute = ''
+  form.course = ''
+  form.year_level = ''
+  form.section = ''
 }
 
 onMounted(restoreSession)

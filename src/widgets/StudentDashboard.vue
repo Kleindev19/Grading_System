@@ -19,7 +19,7 @@
             <rect x="14" y="14" width="5" height="5" />
           </svg>
         </button>
-        <button class="nav-item" type="button" aria-label="My subjects">
+        <button class="nav-item" type="button" aria-label="My subjects" @click="showSubjects">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
@@ -117,7 +117,7 @@
           </article>
         </div>
 
-        <section class="published-panel">
+        <section ref="publishedPanel" class="published-panel">
           <div class="panel-head">
             <h2>PUBLISHED GRADES</h2>
             <select v-model="semester" aria-label="Semester">
@@ -179,6 +179,7 @@ const studentStatus = ref('No records')
 const totalUnits = ref(0)
 
 const publishedGrades = ref([])
+const publishedPanel = ref(null)
 
 onMounted(async () => {
   try {
@@ -205,6 +206,10 @@ const filteredPublished = computed(() => publishedGrades.value.filter(p => {
   const query = searchPublished.value.toLowerCase()
   return matchesSemester && (!query || p.code.toLowerCase().includes(query) || p.subject.toLowerCase().includes(query))
 }))
+
+function showSubjects() {
+  publishedPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
 function signOut(){
 	window.location.replace(window.location.pathname)

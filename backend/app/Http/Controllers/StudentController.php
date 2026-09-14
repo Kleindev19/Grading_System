@@ -12,7 +12,7 @@ class StudentController extends Controller
     {
         abort_unless(in_array($request->attributes->get('auth_user')->role, ['registrar', 'professor'], true), 403, 'Only registrars and professors can view students.');
 
-        return response()->json(['students' => Student::latest()->get(['id', 'student_id', 'name'])]);
+        return response()->json(['students' => Student::latest()->get(['id', 'student_id', 'name', 'institute', 'course', 'year_level', 'section', 'status'])]);
     }
 
     public function store(Request $request): JsonResponse
@@ -23,10 +23,15 @@ class StudentController extends Controller
         $data = $request->validate([
             'student_id' => ['required', 'string', 'max:80', 'unique:students,student_id'],
             'name' => ['required', 'string', 'max:255'],
+            'institute' => ['nullable', 'string', 'max:255'],
+            'course' => ['nullable', 'string', 'max:255'],
+            'year_level' => ['nullable', 'string', 'max:40'],
+            'section' => ['nullable', 'string', 'max:1', 'in:A,B,C,D'],
+            'status' => ['nullable', 'string', 'max:40'],
         ]);
 
         $student = Student::create([...$data, 'created_by' => $user->id]);
 
-        return response()->json(['student' => $student->only(['id', 'student_id', 'name'])], 201);
+        return response()->json(['student' => $student->only(['id', 'student_id', 'name', 'institute', 'course', 'year_level', 'section', 'status'])], 201);
     }
 }

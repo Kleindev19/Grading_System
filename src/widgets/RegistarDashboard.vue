@@ -9,12 +9,13 @@
 
       <nav class="registrar-nav" aria-label="Registrar navigation">
         <button
-          class="nav-button active"
+          class="nav-button"
+          :class="{ active: currentView === 'institute' || currentView === 'management' }"
           type="button"
           aria-label="Grade management"
           @click="currentView = 'institute'"
         >
-          <span class="active-bar"></span>
+          <span v-if="currentView === 'institute' || currentView === 'management'" class="active-bar"></span>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="4" width="5" height="5" />
             <rect x="15" y="4" width="5" height="5" />
@@ -22,10 +23,17 @@
             <rect x="15" y="15" width="5" height="5" />
           </svg>
         </button>
-        <button class="nav-button" type="button" aria-label="Grade sheet">
+        <button class="nav-button" :class="{ active: currentView === 'students' }" type="button" aria-label="Student repository" @click="openRepository">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
+          </svg>
+        </button>
+        <button class="nav-button" :class="{ active: currentView === 'professors' }" type="button" aria-label="Professor repository" @click="openProfessorRepository">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="4" y="4" width="16" height="16" rx="2" />
+            <circle cx="12" cy="10" r="2.5" />
+            <path d="M8 17a4 4 0 0 1 8 0" />
           </svg>
         </button>
       </nav>
@@ -78,7 +86,8 @@
         </div>
       </section>
 
-      <section v-else class="management-view">
+      <section v-else-if="currentView === 'management'" class="management-view">
+        <button class="back-institute-button" type="button" @click="backToInstitutes">&#8592; Back to Institutes</button>
         <h2 class="institute-title">{{ selectedInstitute.name }}</h2>
 
         <div class="management-panel">
@@ -97,13 +106,6 @@
               </svg>
               Release &amp; Schedule
             </button>
-            <button class="tab-button" :class="{ active: activeTab === 'repository' }" type="button" @click="activeTab = 'repository'">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M6 3h9l3 3v15H6Z" />
-                <path d="M14 3v4h4M9 12h6M9 16h6" />
-              </svg>
-              Grade Repository
-            </button>
           </div>
 
           <div v-if="activeTab === 'approval'" class="status-grid">
@@ -118,7 +120,7 @@
             <article class="calendar-card">
               <div class="calendar-heading">
                 <b>Calendar</b>
-                <button type="button" aria-label="Open calendar">...</button>
+                <button type="button" aria-label="Open calendar" :aria-expanded="calendarOpen" @click="calendarOpen = !calendarOpen">...</button>
               </div>
               <div class="calendar-days">
                 <span v-for="day in calendarDays" :key="day.label" :class="{ today: day.today, scheduled: day.scheduled }">
@@ -233,46 +235,21 @@
           <div v-else-if="activeTab === 'release'" class="release-panel">
             <h3>Grade Release Settings</h3>
             <div class="release-content">
-              <form class="release-form" @submit.prevent="addRelease">
-                <p class="release-form-title">+ Schedule New Release</p>
-                <div class="release-fields">
-                  <label>
-                    School Year
-                    <input v-model="releaseForm.schoolYear" type="text" />
-                  </label>
-                  <label>
-                    Semester
-                    <select v-model="releaseForm.semester">
-                      <option>Semester</option>
-                      <option>1st Semester</option>
-                      <option>2nd Semester</option>
-                    </select>
-                  </label>
-                  <label>
-                    Year Level
-                    <select v-model="releaseForm.yearLevel">
-                      <option>Year</option>
-                      <option>1st Year</option>
-                      <option>2nd Year</option>
-                      <option>3rd Year</option>
-                      <option>4th Year</option>
-                    </select>
-                  </label>
-                  <label>
-                    Released Date
-                    <input v-model="releaseForm.releasedDate" type="date" />
-                  </label>
-                </div>
-                <label class="course-field">
-                  Course <span>(multi-select)</span>
-                  <div class="course-chips">
-                    <button v-for="course in courses" :key="course" type="button" :class="{ selected: selectedCourses.includes(course) }" @click="toggleCourse(course)">
-                      {{ course }}
-                    </button>
-                  </div>
-                </label>
-                <button class="add-release-button" type="submit">+ Add</button>
-              </form>
+              <div class="pending-schedule-list">
+                <p class="release-form-title">Pending Approved Sections</p>
+                <article v-for="group in pendingScheduleGroups" :key="group.key" class="pending-schedule-card">
+                  <strong>{{ group.label }}</strong>
+                  <span>{{ group.sheets.length }} approved grade sheet{{ group.sheets.length === 1 ? '' : 's' }} waiting for a release date</span>
+                  <form @submit.prevent="addRelease(group)">
+                    <input v-model="scheduleDraft(group).schoolYear" type="text" aria-label="School Year" />
+                    <select v-model="scheduleDraft(group).semester" aria-label="Semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select>
+                    <select v-model="scheduleDraft(group).yearLevel" aria-label="Year Level"><option>Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select>
+                    <input v-model="scheduleDraft(group).releasedDate" type="date" aria-label="Released Date" required />
+                    <button class="add-release-button" type="submit">+ Add Schedule</button>
+                  </form>
+                </article>
+                <p v-if="pendingScheduleGroups.length === 0" class="release-empty">No approved sections waiting for a schedule.</p>
+              </div>
               <article class="published-card">
                 <div class="published-ring"></div>
                 <strong>{{ publishedCount }}</strong>
@@ -304,12 +281,12 @@
                     <span>{{ schedule.semester }}</span>
                     <span>{{ schedule.yearLevel }}</span>
                     <span class="schedule-courses">
-                      <small v-for="course in schedule.courses" :key="course">{{ course }}</small>
+                      <small v-for="course in schedule.courses" :key="course">{{ scheduleCourseLabel(course) }}</small>
                     </span>
                     <span>{{ schedule.releasedDate || '-' }}</span>
                     <span><b class="schedule-status" :class="schedule.status.toLowerCase()">{{ schedule.status }}</b></span>
                     <span>
-                      <button v-if="schedule.status === 'Scheduled'" class="release-now-button" type="button" @click="releaseNow(schedule)">Release Now</button>
+                      <button v-if="schedule.status === 'Scheduled'" class="release-now-button" type="button" :disabled="!isReleaseAvailable(schedule)" :title="isReleaseAvailable(schedule) ? 'Release this schedule' : `Available on ${schedule.releasedDate}`" @click="releaseNow(schedule)">{{ isReleaseAvailable(schedule) ? 'Release Now' : 'Scheduled' }}</button>
                       <span v-else class="released-label">Released</span>
                     </span>
                   </div>
@@ -342,13 +319,102 @@
             </div>
           </div>
 
-          <div v-else class="repository-panel">
-            <h3>Grade Repository</h3>
-            <p>No published grade sheets available.</p>
+        </div>
+      </section>
+
+      <section v-else-if="currentView === 'students'" class="repository-view">
+        <div class="repository-panel">
+          <div class="repository-heading">
+            <div>
+              <h3>Student Repository</h3>
+              <p>View students and their published grades.</p>
+            </div>
+            <button class="add-student-button" type="button" @click="showStudentForm = true">&#43; Add Student</button>
+          </div>
+          <div class="repository-layout">
+            <aside class="repository-sidebar">
+              <input v-model="repositorySearch" class="repository-search" placeholder="Search student name or ID..." />
+              <div class="repository-filters">
+                <label>Institute<select v-model="repositoryInstitute"><option value="">All Institute</option><option value="ICS">ICS</option><option value="IBE">IBE</option><option value="ITE">ITE</option></select></label>
+                <label>Course<select v-model="repositoryCourse"><option value="">All Course</option><option v-for="course in repositoryCourses" :key="course" :value="course">{{ course }}</option></select></label>
+                <label>Year Level<select v-model="repositoryYear"><option value="">Year</option><option v-for="year in repositoryYears" :key="year" :value="year">{{ year }}</option></select></label>
+                <label>Section<select v-model="repositorySection"><option value="">All Section</option><option v-for="section in repositorySections" :key="section" :value="section">{{ section }}</option></select></label>
+                <span>Last Name Group</span>
+                <div class="letter-groups"><button v-for="group in lastNameGroups" :key="group" type="button" :class="{ selected: repositoryLetter === group }" @click="repositoryLetter = repositoryLetter === group ? '' : group">{{ group }}</button></div>
+              </div>
+              <div class="repository-student-list">
+                <small>Students ({{ filteredRepositoryStudents.length }})</small>
+                <template v-for="group in repositoryGroups" :key="`${group.institute}-${group.section}`">
+                  <strong class="repository-group-heading">{{ group.institute }} - {{ group.course }} {{ yearNumber(group.year) }}-{{ group.section }}</strong>
+                  <button v-for="student in group.students" :key="student.student_id" type="button" :class="{ selected: selectedRepositoryStudentId === student.student_id }" @click="selectedRepositoryStudentId = student.student_id">
+                    <strong>{{ student.name }}</strong><span>{{ student.student_id }} &bull; {{ student.course || 'Course not set' }} {{ yearNumber(student.year_level) }}-{{ student.section || '-' }}</span><b>{{ student.status || 'Active' }}</b>
+                  </button>
+                </template>
+                <p v-if="filteredRepositoryStudents.length === 0" class="repository-empty">No students found.</p>
+              </div>
+            </aside>
+            <section v-if="selectedRepositoryStudent" class="repository-detail">
+              <header><div><h3>{{ selectedRepositoryStudent.name }}</h3><p>{{ selectedRepositoryStudent.student_id }} &bull; {{ selectedRepositoryStudent.institute || '-' }} &bull; {{ selectedRepositoryStudent.course || 'Course not set' }} {{ yearNumber(selectedRepositoryStudent.year_level) }}-{{ selectedRepositoryStudent.section || '-' }}</p></div><span>Status: <b>{{ selectedRepositoryStudent.status || 'Active' }}</b></span></header>
+              <div v-for="semester in repositorySemesters" :key="semester" class="repository-semester">
+                <h4>{{ semester }} - {{ selectedRepositoryStudent.year_level || '1st Year' }}</h4>
+                <div class="repository-grade-header"><strong>SUBJECT CODE</strong><strong>MIDTERM</strong><strong>FINALS</strong><strong>FINAL AVERAGE</strong><strong>GRADE POINT</strong><strong>REMARKS</strong></div>
+                <div v-for="sheet in repositoryGradesBySemester(selectedRepositoryStudent.student_id, semester)" :key="sheet.id" class="repository-grade-row"><strong>{{ sheet.code }}</strong><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.midterm || '-' }}</span><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.finals || '-' }}</span><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.finalGrade || '-' }}</span><b>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.gradePoint || '-' }}</b><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.remarks || '-' }}</span></div>
+                <p v-if="repositoryGradesBySemester(selectedRepositoryStudent.student_id, semester).length === 0" class="repository-empty">No published grades.</p>
+              </div>
+            </section>
+            <p v-else class="repository-empty">Select a student to view grades.</p>
+          </div>
+        </div>
+      </section>
+
+      <section v-else class="professor-view">
+        <div class="professor-repository">
+          <div class="professor-heading">
+            <div>
+              <h2>PROFESSOR REPOSITORY</h2>
+              <h3>{{ selectedInstitute?.name || 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP' }}</h3>
+            </div>
+            <button class="add-professor-button" type="button" @click="showAddProfessorNotice = true">&#43; Add Prof</button>
+          </div>
+          <div class="professor-toolbar">
+            <input v-model="professorSearch" placeholder="Search professor name ......" />
+          </div>
+          <div class="professor-table-wrap">
+            <table class="professor-table">
+              <thead><tr><th>Name</th><th>Email</th><th>Institute</th><th>Department</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr v-for="professor in filteredProfessors" :key="professor.id">
+                  <td>{{ professor.name }}</td><td>{{ professor.email }}</td><td>IBE</td><td><span>BSBA HRM</span><span>BSE</span></td><td><b>{{ professor.status }}</b></td>
+                </tr>
+                <tr v-if="filteredProfessors.length === 0"><td colspan="5" class="empty-cell">No registered professors found.</td></tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </section>
     </main>
+
+    <div v-if="showStudentForm" class="student-form-backdrop" @click.self="showStudentForm = false">
+      <form class="student-form-modal" @submit.prevent="saveStudent">
+        <div class="student-form-heading"><h2>&#43; Add New Student</h2><button type="button" aria-label="Close" @click="showStudentForm = false">&#10005;</button></div>
+        <label>Student Number<input v-model.trim="studentForm.student_id" required /></label>
+        <label>Student Name<input v-model.trim="studentForm.name" required /></label>
+        <label>Institute<input v-model.trim="studentForm.institute" /></label>
+        <label>Course<input v-model.trim="studentForm.course" /></label>
+        <label>Year Level<select v-model="studentForm.year_level"><option value="">Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></label>
+        <label>Section<select v-model="studentForm.section"><option value="">Section</option><option v-for="section in repositorySections" :key="section" :value="section">{{ section }}</option></select></label>
+        <label>Status<select v-model="studentForm.status"><option>Active</option><option>Inactive</option></select></label>
+        <button class="student-form-submit" type="submit">&#43; Add</button>
+      </form>
+    </div>
+
+    <div v-if="showAddProfessorNotice" class="student-form-backdrop" @click.self="showAddProfessorNotice = false">
+      <section class="student-form-modal professor-notice" role="dialog" aria-modal="true">
+        <div class="student-form-heading"><h2>Add Professor</h2><button type="button" aria-label="Close" @click="showAddProfessorNotice = false">&#10005;</button></div>
+        <p>Professor accounts are created through the Registration form. After registration and email verification, the account will appear here automatically.</p>
+        <button class="student-form-submit" type="button" @click="showAddProfessorNotice = false">Close</button>
+      </section>
+    </div>
 
     <div v-if="reviewSheet" class="review-overlay" @click.self="reviewSheet = null">
       <section class="review-modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
@@ -441,8 +507,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
-import { addStudent, createGradePeriod, createGradeSchedule, getGradeSchedules, getGradeSheets, getInstitutes, getStudents, releaseGradeSchedule, updateGradeSheetStatus } from '../services/dataService'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { addStudent, createGradePeriod, createGradeSchedule, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, updateGradeSheetStatus } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
 const props = defineProps({ user: { type: Object, default: null } })
@@ -454,10 +520,13 @@ const search = ref('')
 const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
 const activeTab = ref('approval')
+const currentTime = ref(Date.now())
+const calendarOpen = ref(false)
+const showAddProfessorNotice = ref(false)
 const expandedYears = ref(['1st Year'])
 const publishedCount = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Published').length)
-const courses = ['BSBA HRM - Business Administration', 'BS Entrep - Entrepreneurship']
-const selectedCourses = ref([...courses])
+const approvedGradeSheets = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Approved' && sheet.id))
+const scheduleDrafts = reactive({})
 const releaseForm = ref({
   schoolYear: '2025-2026',
   semester: 'Semester',
@@ -474,21 +543,83 @@ const periodForm = ref({
 const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
 const institutes = getInstitutes()
 
+function instituteMatches(value, institute) {
+  const text = `${value?.code || ''} ${value?.subject || ''} ${value?.name || ''} ${value?.section || ''}`.toLowerCase()
+  const isComputing = /\bbsit\b|\bitfund\b|\bit\d+\b|comput/.test(text)
+  const isEducation = /\bbeed\b|\bbed\b|education|edu\d+|teacher/.test(text)
+  const isBusiness = /\bbsba\b|business|buslaw|finacc|entrepreneur|mock101/.test(text)
+  if (institute.id === 'ics') return isComputing && !isEducation
+  if (institute.id === 'ite') return isEducation && !isComputing
+  if (institute.id === 'ibe') return isBusiness && !isComputing && !isEducation
+  return false
+}
+
 const gradeSheets = ref([])
 const schedules = ref([])
 const reviewStudents = computed(() => reviewSheet.value?.student_records || [])
 const students = ref([])
-const studentForm = ref({ student_id: '', name: '' })
+const professors = ref([])
+const professorSearch = ref('')
+const filteredProfessors = computed(() => {
+  const query = professorSearch.value.trim().toLowerCase()
+  return professors.value.filter(professor => !query || `${professor.name} ${professor.email}`.toLowerCase().includes(query))
+})
+const repositorySearch = ref('')
+const repositoryInstitute = ref('')
+const repositoryCourse = ref('')
+const repositoryYear = ref('')
+const repositorySection = ref('')
+const repositoryLetter = ref('')
+const selectedRepositoryStudentId = ref('')
+const showStudentForm = ref(false)
+const studentForm = ref({ student_id: '', name: '', institute: '', course: '', year_level: '', section: '', status: 'Active' })
+const repositoryYears = ['1st Year', '2nd Year', '3rd Year', '4th Year']
+const repositorySections = ['A', 'B', 'C', 'D']
+const lastNameGroups = ['A - E', 'F - J', 'K - O', 'P - T', 'U - Z']
+const repositorySemesters = ['1st Semester', '2nd Semester']
+const repositoryCourses = computed(() => [...new Set(students.value.map(student => student.course).filter(Boolean))])
+const filteredRepositoryStudents = computed(() => {
+  const query = repositorySearch.value.trim().toLowerCase()
+  return students.value.filter(student => {
+    const nameInitial = student.name.trim().charAt(0).toUpperCase()
+    const [start, end] = repositoryLetter.value.split('-').map(part => part.trim())
+    const matchesLetter = !repositoryLetter.value || nameInitial >= start && nameInitial <= end
+    return (!query || `${student.student_id} ${student.name}`.toLowerCase().includes(query)) && (!repositoryInstitute.value || student.institute === repositoryInstitute.value) && (!repositoryCourse.value || student.course === repositoryCourse.value) && (!repositoryYear.value || student.year_level === repositoryYear.value) && (!repositorySection.value || student.section?.split('-').pop()?.toUpperCase() === repositorySection.value) && matchesLetter
+  })
+})
+const repositoryGroups = computed(() => {
+  const groups = new Map()
+  filteredRepositoryStudents.value.forEach(student => {
+    const institute = student.institute || 'Unassigned'
+    const section = student.section?.split('-').pop()?.toUpperCase() || 'Unassigned'
+    const course = student.course || 'Course not set'
+    const year = student.year_level || 'Year not set'
+    const key = `${institute}-${course}-${year}-${section}`
+    if (!groups.has(key)) groups.set(key, { institute, course, year, section, students: [] })
+    groups.get(key).students.push(student)
+  })
+  return [...groups.values()]
+})
+const selectedRepositoryStudent = computed(() => students.value.find(student => student.student_id === selectedRepositoryStudentId.value) || filteredRepositoryStudents.value[0])
+
+function isReleaseAvailable(schedule) {
+  if (schedule.status !== 'Scheduled') return false
+  if (!schedule.releasedDate) return true
+  return new Date(`${schedule.releasedDate}T00:00:00`).getTime() <= currentTime.value
+}
+
+let releaseClock
 
 onMounted(async () => {
-  try {
-    ;[gradeSheets.value, students.value, schedules.value] = await Promise.all([getGradeSheets(), getStudents(), getGradeSchedules()])
-  } catch {
-    gradeSheets.value = []
-    students.value = []
-    schedules.value = []
-  }
+  releaseClock = window.setInterval(() => { currentTime.value = Date.now() }, 30000)
+  const [gradeSheetsResult, studentsResult, schedulesResult, professorsResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules(), getProfessors()])
+  if (gradeSheetsResult.status === 'fulfilled') gradeSheets.value = gradeSheetsResult.value
+  if (studentsResult.status === 'fulfilled') students.value = studentsResult.value
+  if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
+  if (professorsResult.status === 'fulfilled') professors.value = professorsResult.value
 })
+
+onUnmounted(() => window.clearInterval(releaseClock))
 
 const calendarDays = computed(() => {
   const today = new Date()
@@ -524,6 +655,7 @@ const summaryCards = computed(() => {
 const filteredSheets = computed(() => {
   const query = search.value.trim().toLowerCase()
   return gradeSheets.value.filter((sheet) => {
+    const matchesInstitute = !selectedInstitute.value || instituteMatches(sheet, selectedInstitute.value)
     const matchesStatus = statusFilter.value === 'All Status' || sheet.status === statusFilter.value
     const matchesSearch =
       !query ||
@@ -532,7 +664,7 @@ const filteredSheets = computed(() => {
       sheet.professor.toLowerCase().includes(query) ||
       sheet.section.toLowerCase().includes(query)
 
-    return matchesStatus && matchesSearch
+    return matchesInstitute && matchesStatus && matchesSearch
   })
 })
 
@@ -545,8 +677,19 @@ const releaseYearSections = computed(() => {
   const schoolYears = [...new Set([...schedules.value.filter(schedule => schedule.yearLevel !== 'Grade Period').map(schedule => schedule.schoolYear)])]
   return schoolYears.map(schoolYear => ({
     label: `A.Y ${schoolYear.replace('-', ' - ')}`,
-    schedules: schedules.value.filter(schedule => schedule.schoolYear === schoolYear && schedule.yearLevel !== 'Grade Period'),
+    schedules: schedules.value.filter(schedule => schedule.schoolYear === schoolYear && schedule.yearLevel !== 'Grade Period' && (!selectedInstitute.value || scheduleMatchesInstitute(schedule, selectedInstitute.value))),
   }))
+})
+
+const scheduledSheetIds = computed(() => new Set(schedules.value.flatMap(schedule => schedule.courses.filter(course => course.startsWith('sheet:')).map(course => Number(course.replace('sheet:', ''))))))
+const pendingScheduleGroups = computed(() => {
+  const groups = new Map()
+  approvedGradeSheets.value.filter(sheet => !scheduledSheetIds.value.has(sheet.id)).forEach(sheet => {
+    const key = `${sheet.code}-${sheet.section}`
+    if (!groups.has(key)) groups.set(key, { key, label: `${sheet.code} - ${sheet.section}`, sheets: [] })
+    groups.get(key).sheets.push(sheet)
+  })
+  return [...groups.values()]
 })
 
 function semesterNumber(semester) {
@@ -568,6 +711,37 @@ function toggleReleaseYear(label) {
 function selectInstitute(institute) {
   selectedInstitute.value = institute
   currentView.value = 'management'
+  activeTab.value = 'approval'
+}
+
+function backToInstitutes() {
+  currentView.value = 'institute'
+  activeTab.value = 'approval'
+}
+
+function openRepository() {
+  currentView.value = 'students'
+}
+
+function openProfessorRepository() {
+  if (!selectedInstitute.value) selectedInstitute.value = institutes[0]
+  currentView.value = 'professors'
+}
+
+function repositoryGrades(studentId) {
+  return gradeSheets.value.filter(sheet => sheet.status === 'Published' && sheet.student_records?.some(record => record.id === studentId))
+}
+
+function repositoryGradesBySemester(studentId, semester) {
+  return repositoryGrades(studentId).filter(sheet => sheet.semester.toLowerCase().includes(semester.toLowerCase().split(' ')[0]))
+}
+
+function yearNumber(year) {
+  return year?.charAt(0) || ''
+}
+
+function gradeRecord(sheet, studentId) {
+  return sheet.student_records?.find(record => record.id === studentId)
 }
 
 function openReview(sheet) {
@@ -587,26 +761,56 @@ async function changeStatus(status) {
   }
 }
 
-function toggleCourse(course) {
-  selectedCourses.value = selectedCourses.value.includes(course)
-    ? selectedCourses.value.filter(item => item !== course)
-    : [...selectedCourses.value, course]
+function scheduleCourseLabel(course) {
+  if (!course.startsWith('sheet:')) return course
+  const sheet = gradeSheets.value.find(item => `sheet:${item.id}` === course)
+  return sheet ? `${sheet.code} - ${sheet.section}` : course
 }
 
-function addRelease() {
-  if (!selectedCourses.value.length || releaseForm.value.yearLevel === 'Year' || releaseForm.value.semester === 'Semester') return
+function scheduleDraft(group) {
+  if (!scheduleDrafts[group.key]) {
+    scheduleDrafts[group.key] = { schoolYear: '2025-2026', semester: 'Semester', yearLevel: 'Year', releasedDate: '' }
+  }
+  return scheduleDrafts[group.key]
+}
 
-  createGradeSchedule({
-    schoolYear: releaseForm.value.schoolYear,
-    semester: releaseForm.value.semester,
-    yearLevel: releaseForm.value.yearLevel,
-    courses: [...selectedCourses.value],
-    releasedDate: releaseForm.value.releasedDate,
-  }).then(schedule => {
+function scheduleMatchesInstitute(schedule, institute) {
+  return schedule.courses.length === 0 || schedule.courses.some(course => {
+    if (!course.startsWith('sheet:')) return instituteMatches({ name: course }, institute)
+    const sheet = gradeSheets.value.find(item => `sheet:${item.id}` === course)
+    return sheet ? instituteMatches(sheet, institute) : false
+  })
+}
+
+async function addRelease(group) {
+  const draft = scheduleDraft(group)
+  if (!draft.schoolYear.trim()) {
+    window.alert('Enter a school year before adding the schedule.')
+    return
+  }
+  if (draft.yearLevel === 'Year' || draft.semester === 'Semester') {
+    window.alert('Select a semester and year level before adding the schedule.')
+    return
+  }
+  if (!draft.releasedDate) {
+    window.alert('Select a released date before adding the schedule.')
+    return
+  }
+  try {
+    const schedule = await createGradeSchedule({
+      schoolYear: draft.schoolYear.trim(),
+      semester: draft.semester,
+      yearLevel: draft.yearLevel,
+      courses: group.sheets.map(sheet => `sheet:${sheet.id}`),
+      releasedDate: draft.releasedDate,
+    })
     schedules.value.unshift(schedule)
     const label = `A.Y ${schedule.schoolYear.replace('-', ' - ')}`
     if (!expandedReleaseYears.value.includes(label)) expandedReleaseYears.value.push(label)
-  }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to add release schedule.'))
+    delete scheduleDrafts[group.key]
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Unable to add release schedule.')
+  }
 }
 
 function releaseNow(schedule) {
@@ -627,7 +831,8 @@ function saveGradePeriod() {
 async function saveStudent() {
   try {
     students.value.unshift(await addStudent(studentForm.value))
-    studentForm.value = { student_id: '', name: '' }
+    studentForm.value = { student_id: '', name: '', institute: '', course: '', year_level: '', section: '', status: 'Active' }
+    showStudentForm.value = false
   } catch (error) {
     window.alert(error instanceof Error ? error.message : 'Unable to add student.')
   }
@@ -904,6 +1109,127 @@ async function saveStudent() {
   background: #f9f9f9;
 }
 
+.back-institute-button {
+  margin-bottom: 18px;
+  padding: 8px 14px;
+  border: 1px solid #4c865f;
+  border-radius: 6px;
+  background: #fff;
+  color: #245c38;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.back-institute-button:hover {
+  background: #e5f7e9;
+}
+
+.repository-view {
+  flex: 1;
+  overflow: auto;
+  padding: 31px 30px 46px;
+  background: #f9f9f9;
+}
+
+.professor-view {
+  flex: 1;
+  overflow: auto;
+  padding: 31px 30px 46px;
+  background: #f9f9f9;
+}
+
+.professor-repository {
+  max-width: 1110px;
+  margin: 0 auto;
+}
+
+.professor-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.professor-heading h2,
+.professor-heading h3 {
+  margin: 0;
+}
+
+.professor-heading h2 {
+  color: #111;
+  font-size: 25px;
+}
+
+.professor-heading h3 {
+  margin-top: 12px;
+  color: #155423;
+  font-size: 25px;
+  text-shadow: -2px 0 0 #f3df23;
+}
+
+.add-professor-button {
+  padding: 10px 15px;
+  border: 0;
+  border-radius: 5px;
+  background: #4c865f;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.professor-toolbar input {
+  width: min(420px, 100%);
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 1px solid #777;
+  border-radius: 5px;
+}
+
+.professor-table-wrap {
+  margin-top: 8px;
+  overflow-x: auto;
+  border: 1px solid #c8c8c8;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.professor-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.professor-table th,
+.professor-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #d4d4d4;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.professor-table th {
+  background: #fff;
+  font-weight: 700;
+}
+
+.professor-table td:nth-child(4) span {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 3px 8px;
+  border: 1px solid #c8c8c8;
+  border-radius: 10px;
+  font-size: 10px;
+}
+
+.professor-table td:last-child b {
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #4c865f;
+  color: #fff;
+  font-size: 10px;
+}
+
 .institute-title {
   margin: 0 0 30px;
   text-align: center;
@@ -926,7 +1252,7 @@ async function saveStudent() {
 
 .tabs-row {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   min-height: 81px;
   border-bottom: 1px solid #bdbdbd;
 }
@@ -1160,6 +1486,346 @@ async function saveStudent() {
   font-weight: 800;
 }
 
+.repository-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.repository-heading p {
+  margin: -8px 0 16px;
+  color: #66706a;
+  font-size: 12px;
+}
+
+.add-student-button,
+.student-form-submit {
+  border: 0;
+  border-radius: 6px;
+  background: #4c865f;
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.add-student-button {
+  padding: 10px 16px;
+}
+
+.repository-search {
+  width: min(490px, 100%);
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border: 1px solid #aebbb1;
+  border-radius: 6px;
+}
+
+.repository-layout {
+  display: grid;
+  grid-template-columns: 285px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.repository-sidebar {
+  min-width: 0;
+}
+
+.repository-sidebar .repository-search {
+  width: 100%;
+}
+
+.repository-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #c8d8cc;
+  border-radius: 7px;
+}
+
+.repository-filters label {
+  display: grid;
+  gap: 4px;
+  color: #222;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.repository-filters select {
+  min-height: 30px;
+  border: 1px solid #aebbb1;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.repository-filters > span {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.letter-groups {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 5px;
+}
+
+.letter-groups button {
+  padding: 7px 2px;
+  border: 1px solid #aebbb1;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.letter-groups button.selected {
+  background: #4c865f;
+  color: #fff;
+}
+
+.repository-student-list {
+  margin-top: 8px;
+  border: 1px solid #c8d8cc;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.repository-student-list > small {
+  display: block;
+  padding: 8px 10px;
+  color: #66706a;
+}
+
+.repository-group-heading {
+  display: block;
+  padding: 8px 10px;
+  border-top: 1px solid #d8dfda;
+  background: #eef8f0;
+  color: #245c38;
+  font-size: 12px;
+}
+
+.repository-student-list > button {
+  position: relative;
+  display: grid;
+  width: 100%;
+  gap: 2px;
+  padding: 8px 42px 8px 10px;
+  border: 0;
+  border-top: 1px solid #d8dfda;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.repository-student-list > button.selected {
+  background: #b8f1c7;
+}
+
+.repository-student-list > button span {
+  color: #718078;
+  font-size: 11px;
+}
+
+.repository-student-list > button b {
+  position: absolute;
+  top: 10px;
+  right: 8px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: #4c865f;
+  color: #fff;
+  font-size: 10px;
+}
+
+.repository-detail {
+  min-width: 0;
+  border: 1px solid #c8d8cc;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.repository-detail > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #b8b8b8;
+}
+
+.repository-detail > header h3,
+.repository-detail > header p {
+  margin: 0;
+}
+
+.repository-detail > header h3 {
+  font-size: 21px;
+}
+
+.repository-detail > header p {
+  color: #718078;
+  font-size: 12px;
+}
+
+.repository-detail > header span {
+  white-space: nowrap;
+  font-size: 12px;
+}
+
+.repository-detail > header b {
+  padding: 3px 7px;
+  border-radius: 3px;
+  background: #4c865f;
+  color: #fff;
+}
+
+.repository-semester {
+  padding: 0 12px 12px;
+}
+
+.repository-semester h4 {
+  margin: 8px 0;
+  font-size: 14px;
+}
+
+.repository-grade-header,
+.repository-grade-row {
+  display: grid;
+  grid-template-columns: 1.5fr repeat(5, 1fr);
+  gap: 8px;
+  align-items: center;
+  padding: 7px 10px;
+  text-align: center;
+}
+
+.repository-grade-header {
+  background: #b8f1c7;
+  color: #245c38;
+  font-size: 11px;
+}
+
+.repository-grade-row {
+  border-bottom: 1px solid #bbb;
+  font-size: 12px;
+}
+
+.repository-grade-row strong {
+  text-align: left;
+}
+
+.repository-student {
+  margin-bottom: 12px;
+  border: 1px solid #c8d8cc;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.repository-student-heading,
+.repository-grade {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) minmax(160px, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+}
+
+.repository-student-heading {
+  background: #e5f7e9;
+}
+
+.repository-student-heading span,
+.repository-grade span {
+  color: #526158;
+  font-size: 12px;
+}
+
+.repository-student-heading b,
+.repository-grade b {
+  color: #287442;
+  font-size: 12px;
+}
+
+.repository-grade {
+  grid-template-columns: 110px minmax(150px, 1fr) repeat(3, auto) 90px;
+  border-top: 1px solid #d8dfda;
+}
+
+.repository-empty {
+  margin: 0;
+  padding: 14px;
+  color: #66706a;
+  font-size: 13px;
+}
+
+.student-form-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, .35);
+}
+
+.student-form-modal {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  width: min(780px, 100%);
+  padding: 20px;
+  border: 1px solid #c8d8cc;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2);
+}
+
+.student-form-heading {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.student-form-heading h2 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.student-form-heading button {
+  border: 0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+
+.student-form-modal label {
+  display: grid;
+  gap: 6px;
+  color: #222;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.student-form-modal input,
+.student-form-modal select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  border: 1px solid #aebbb1;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.student-form-submit {
+  grid-column: 3;
+  min-height: 38px;
+  margin-top: 8px;
+}
+
 .release-content {
   min-height: 350px;
   padding: 16px 14px 18px;
@@ -1177,6 +1843,54 @@ async function saveStudent() {
   border-radius: 7px;
   box-shadow: 0 2px 2px rgba(0, 0, 0, 0.15);
   box-sizing: border-box;
+}
+
+.pending-schedule-list {
+  width: min(765px, 100%);
+  padding: 0 14px 12px;
+}
+
+.pending-schedule-card {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) auto;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+  padding: 12px;
+  border: 1px solid #b9d1be;
+  border-radius: 7px;
+  background: #f5fbf6;
+}
+
+.pending-schedule-card > strong {
+  color: #245c38;
+}
+
+.pending-schedule-card > span {
+  color: #66706a;
+  font-size: 12px;
+  text-align: right;
+}
+
+.pending-schedule-card form {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  gap: 8px;
+}
+
+.pending-schedule-card input,
+.pending-schedule-card select {
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #aebbb1;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.pending-schedule-card .add-release-button {
+  margin: 0;
+  white-space: nowrap;
 }
 
 .release-form-title {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeSchedule;
+use App\Models\GradeSheet;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -46,7 +47,31 @@ class GradeScheduleController extends Controller
     {
         abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can release schedules.');
         abort_if($schedule->released_date?->isFuture(), 422, 'This release is scheduled for a future date.');
+
         $schedule->forceFill(['status' => 'Released', 'released_date' => $schedule->released_date ?: now()->toDateString()])->save();
+
+        $sheetIds = collect($schedule->courses ?? [])
+            ->filter(fn (string $course): bool => str_starts_with($course, 'sheet:'))
+            ->map(fn (string $course): int => (int) str_replace('sheet:', '', $course))
+            ->filter()
+            ->values();
+
+        if ($sheetIds->isNotEmpty()) {
+            GradeSheet::query()
+                ->whereIn('id', $sheetIds)
+                ->where('status', 'Approved')
+                ->update(['status' => 'Published']);
+        } else {
+            $semester = str_ireplace('semester', 'sem', $schedule->semester);
+
+            GradeSheet::query()
+                ->where(function ($query) use ($schedule, $semester) {
+                    $query->where('semester', $schedule->semester)
+                        ->orWhere('semester', 'like', $semester . '%');
+                })
+                ->where('status', 'Approved')
+                ->update(['status' => 'Published']);
+        }
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
     }

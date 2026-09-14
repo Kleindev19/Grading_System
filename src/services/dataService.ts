@@ -54,6 +54,19 @@ export interface Student {
   id?: number
   student_id: string
   name: string
+  institute?: string
+  course?: string
+  year_level?: string
+  section?: string
+  status?: string
+}
+
+export interface Professor {
+  id: number
+  name: string
+  email: string
+  username: string
+  status: 'Active' | 'Pending'
 }
 
 // Centralized data provider functions — replace inline mock data with function-based sources
@@ -181,6 +194,11 @@ export async function createGradePeriod(period: { schoolYear: string; semester: 
 export async function getStudents(): Promise<Student[]> {
   const payload = await apiRequest<{ students: Student[] }>('/students')
   return payload.students
+}
+
+export async function getProfessors(): Promise<Professor[]> {
+  const payload = await apiRequest<{ professors: Professor[] }>('/professors')
+  return payload.professors
 }
 
 export async function addStudent(student: Omit<Student, 'id'>): Promise<Student> {

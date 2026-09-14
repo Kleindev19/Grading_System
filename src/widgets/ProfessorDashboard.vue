@@ -11,22 +11,12 @@
       </nav>
       <div class="prof-sidebar-footer"><div class="sidebar-rule footer-rule"></div><div class="prof-profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>{{ props.user?.name || 'PROFESSOR' }}</span></div><button class="logout-button" type="button" aria-label="Sign out" @click="signOut"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg></button></div>
     </aside>
-    <main class="prof-page" @click.capture="handlePageClick">
+    <main class="prof-page">
       <header class="prof-header"><button v-if="isMobile" class="mobile-hamburger" type="button" aria-label="Open menu" @click="sidebarCollapsed = false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><h1>GRADE ENTRY</h1><span class="bell" aria-label="Notifications">&#128276;</span></header>
       <div v-if="view === 'lists'" class="dashboard-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select><div class="deadlines">DEADLINES:</div></div><div class="tabs"><button :class="{ selected: tab === 'lists' }" type="button" @click="tab = 'lists'">Class Lists</button><button :class="{ selected: tab === 'messages' }" type="button" @click="openMessages">Messages</button></div><section class="roster-panel"><div class="roster-heading"><h2>Student Rosters by Institute</h2><p>Browse enrolled students across all your assigned courses.</p></div><button v-for="institute in institutes" :key="institute.id" class="institute-line" :class="{ expanded: expandedInstitute === institute.id }" type="button" @click="toggleInstitute(institute.id)"><span>{{ expandedInstitute === institute.id ? '&#8964;' : '&#8250;' }}</span>{{ institute.name }}</button><template v-if="expandedInstitute"><div class="year-line"><strong>YEAR LEVEL:</strong><button v-for="year in years" :key="year" :class="{ chosen: selectedYear === year }" type="button" @click="selectedYear = year">{{ year }}</button></div><div v-for="group in visibleGroups" :key="group.name" class="course-group"><h3>{{ group.name }}</h3><div class="course-grid"><button v-for="course in group.courses" :key="course.code + course.section" class="course-card" type="button" @click="openGrades(course)"><small>{{ course.code }}</small><strong>{{ course.section }}</strong><span>1st Sem, A.Y 2025-26 | &#9673; {{ course.students }} Students</span></button></div></div></template></section></div>
       <div v-else-if="view === 'messages'" class="messages-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><div class="tabs"><button type="button" @click="goToLists">Class Lists</button><button class="selected" type="button">Messages</button></div><div class="message-layout"><section class="conversation-list"><h2>Student Conversations</h2><button v-for="message in filteredMessages" :key="message.id" class="message-preview" :class="{ active: activeMessage.id === message.id }" type="button" @click="activeMessage = message"><strong>{{ message.name }}</strong><span>“{{ message.preview }}”</span><small>{{ message.id }} &bull; {{ message.section }}</small></button></section><section class="conversation"><div class="conversation-head"><div class="avatar">{{ activeMessage.name.charAt(0) }}</div><div><strong>{{ activeMessage.name }}</strong><small>{{ activeMessage.id }} &bull; {{ activeMessage.section }}</small></div><select v-model="messageAssessment" @change="openGrades(activeMessage.course)"><option>Midterm</option><option>Finals</option><option>Final Grade</option></select></div><div class="chat"><span class="chat-time">MON AT 12:15 PM</span><p class="incoming">{{ activeMessage.preview }}</p><p class="outgoing">Thanks for flagging. I will review your Finals items today.</p></div><div class="reply"><input v-model="replyText" placeholder="Type your reply..." /><button type="button" @click="replyText = ''">Send Reply</button></div></section></div></div>
-      <div v-else class="grades-content"><button class="back-link" type="button" @click="goToLists">&#8592; Return to Dashboard</button><div class="grade-toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><div class="grade-actions"><button type="button" class="add-button">+ Add Assessment</button><button type="button" class="remove-button">&#9632; Remove</button><button type="button">&#8634; Restore</button></div></div><div class="grade-columns"><section class="grade-table-card"><h2>{{ selectedCourse.name }} ({{ selectedCourse.section }})</h2><div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" @click="activePeriod = 'midterm'">Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" @click="openFinals">Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div><div class="table-scroll"><table class="grade-table"><thead><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">MIDTERM</th><th colspan="5">QUIZ</th><th colspan="4">ACTIVITY</th><th>RECI</th><th>M. Exam</th></tr><tr><th v-for="label in gradeHeaders" :key="label">{{ label }}</th></tr></thead><tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><td>{{ student.midterm }}</td><td v-for="label in gradeHeaders" :key="label"><input v-model="student.scores[label]" type="number" min="0" max="20" /></td></tr></tbody></table></div></section><aside class="summary-box"><h2>MIDTERM</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in midtermItems" :key="item.name"><td>{{ item.name }}</td><td>-</td><td>-</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>-</td></tr></tbody></table></aside></div><div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="finals-title"><div class="notice-icon">&#128197;</div><h2 id="finals-title">Hang tight - finals aren't ready yet</h2><p>The registrar sets when grading starts, so there's nothing to do here for now. We'll let you know the moment it's ready.</p><strong>Opens on October 10, 2026</strong><button type="button" @click="showFinalsNotice = false">Close</button></section></div></div>
+      <div v-else class="grades-content"><button class="back-link" type="button" @click="goToLists">&#8592; Return to Dashboard</button><div class="grade-toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><div class="grade-actions"><button type="button" class="add-button" @click="addAssessment">+ Add Assessment</button><button type="button" class="remove-button" @click="removeAssessment">&#9632; Remove</button><button type="button" @click="restoreGrades">&#8634; Restore</button></div></div><div class="grade-columns"><section class="grade-table-card"><h2>{{ selectedCourse.name }} ({{ selectedCourse.section }})</h2><div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" @click="activePeriod = 'midterm'">Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" @click="openFinals">Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div><div class="table-scroll"><table class="grade-table"><thead><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">MIDTERM</th><th colspan="5">QUIZ</th><th colspan="4">ACTIVITY</th><th>RECI</th><th>M. Exam</th></tr><tr><th v-for="label in gradeHeaders" :key="label">{{ label }}</th></tr></thead><tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><td>{{ student.midterm }}</td><td v-for="label in gradeHeaders" :key="label"><input v-model="student.scores[label]" type="number" min="0" max="20" /></td></tr></tbody></table></div></section><aside class="summary-box"><h2>MIDTERM</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in midtermItems" :key="item.name"><td>{{ item.name }}</td><td>-</td><td>-</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>-</td></tr></tbody></table></aside></div><button class="submit-action-btn" type="button" @click="submitToRegistrar">Submit to Registrar</button><div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="finals-title"><div class="notice-icon">&#128197;</div><h2 id="finals-title">Hang tight - finals aren't ready yet</h2><p>The registrar sets when grading starts, so there's nothing to do here for now. We'll let you know the moment it's ready.</p><strong>Opens on October 10, 2026</strong><button type="button" @click="showFinalsNotice = false">Close</button></section></div></div>
     </main>
-    <section v-if="view === 'grades'" class="student-entry-panel">
-      <h3>Students</h3>
-      <div v-for="(student, index) in gradeStudents" :key="index" class="student-entry-row">
-        <input v-model.trim="student.id" placeholder="Student ID" aria-label="Student ID" />
-        <input v-model.trim="student.name" placeholder="Student name" aria-label="Student name" />
-        <button type="button" aria-label="Remove student" @click="removeStudent(index)">Remove</button>
-      </div>
-      <button type="button" @click="addStudent">+ Add Student</button>
-      <button class="submit-bottom" type="button" @click="submitToRegistrar">&#9992; Submit to Registrar</button>
-    </section>
   </div>
 </template>
 
@@ -45,17 +35,31 @@ function toggleInstitute(id) { expandedInstitute.value = expandedInstitute.value
   activeMessage.value = { id: '', name: '', section: '', preview: '', course: { name: '', section: '' } }
   selectedCourse.value = { name: '', section: '' }
 const allGradeStudents = reactive([])
-const submissionNotice = ref(false)
 
 watch(submissionSent, (submitted) => {
-  if (submitted) submissionNotice.value = true
+  if (submitted) {
+    submissionNotice.value = true
+    window.setTimeout(() => {
+      submissionNotice.value = false
+    }, 2500)
+  }
 })
 
-function handlePageClick(event) {
-  const target = event.target instanceof Element ? event.target.closest('.submit-bottom, .add-button') : null
-  if (!target) return
-  event.stopImmediatePropagation()
-  submitToRegistrar()
+function addAssessment() {
+  const label = `Q${gradeHeaders.length + 1}`
+  gradeHeaders.push(label)
+  gradeStudents.forEach(student => { student.scores[label] = '' })
+}
+
+function removeAssessment() {
+  if (gradeHeaders.length <= 1) return
+  const label = gradeHeaders.pop()
+  gradeStudents.forEach(student => { delete student.scores[label] })
+}
+
+function restoreGrades() {
+  searchStudent.value = ''
+  gradeStudents.splice(0, gradeStudents.length, ...allGradeStudents)
 }
 
 watch(searchStudent, (query) => {
@@ -75,53 +79,12 @@ onMounted(async () => {
   }
 })
 
-async function submitStudentRecords() {
-  const studentRecords = gradeStudents
-    .filter(student => student.id.trim() && student.name.trim())
-    .map(student => ({ id: student.id.trim(), name: student.name.trim(), midterm: student.midterm || '', finals: student.finals || '', finalGrade: student.finalGrade || '', gradePoint: student.gradePoint || '', remarks: student.remarks || '', scores: student.scores || {} }))
-
-  if (studentRecords.length !== gradeStudents.length) {
-    window.alert('Enter a student ID and name for every row before submitting.')
-    return
-  }
-
-  try {
-    await submitGradeSheet({
-      code: `${selectedCourse.value.section}-BUSLAW1`,
-      subject: selectedCourse.value.name,
-      section: selectedCourse.value.section,
-      professor: 'Professor',
-      semester: '1st Sem, A.Y. 2025-26',
-      students: studentRecords.length,
-      submitted: new Date().toLocaleDateString('en-US'),
-      status: 'Submitted',
-    }, studentRecords)
-    submissionSent.value = true
-    emit('submitted')
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : 'Unable to submit students.')
-  }
-}
-
-function addStudent() {
-  const student = { id: '', name: '', midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: {} }
-  allGradeStudents.push(student)
-  if (!searchStudent.value) gradeStudents.push(student)
-}
-
-function removeStudent(index) {
-  const student = gradeStudents[index]
-  const allIndex = allGradeStudents.indexOf(student)
-  if (allIndex !== -1) allGradeStudents.splice(allIndex, 1)
-  gradeStudents.splice(index, 1)
-}
 </script>
 
 <style scoped>
 *,*::before,*::after{box-sizing:border-box}.prof-root{position:absolute;inset:0;display:flex;overflow:hidden;background:#fff;color:#111;font-family:Arial,Helvetica,sans-serif}.prof-sidebar{width:108px;flex:0 0 108px;display:flex;flex-direction:column;align-items:center;padding:50px 0 28px;color:#fff;background:linear-gradient(#124a29 0%,#17552c 58%,#72a900 100%);z-index:20}.seal-wrap img{width:68px;height:68px;object-fit:contain}.sidebar-rule{width:70px;height:1px;margin:34px 0 56px;background:#ffffffb3}.prof-nav{display:flex;flex-direction:column;gap:24px;align-items:center;width:100%}.nav-button,.logout-button,.mobile-hamburger{border:0;background:transparent;color:inherit;cursor:pointer}.nav-button{position:relative;width:70px;height:54px;border-radius:9px}.nav-button.active{background:#54a569a6}.active-bar{position:absolute;left:-9px;top:8px;width:6px;height:38px;border-radius:0 7px 7px 0;background:#ffdf4f}.nav-button svg,.logout-button svg,.prof-profile svg,.mobile-hamburger svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.nav-button.active svg{color:#ffe66b}.prof-sidebar-footer{width:100%;margin-top:auto;display:flex;flex-direction:column;align-items:center}.footer-rule{margin:0 0 20px}.prof-profile{display:flex;flex-direction:column;align-items:center;gap:6px;margin-bottom:32px;font-size:12px;font-weight:800}.prof-profile svg{width:38px;height:38px}.prof-page{min-width:0;flex:1;overflow:hidden;background:#fff}.prof-header{height:80px;display:flex;align-items:center;padding:0 29px;border-bottom:1px solid #ccc;box-shadow:0 2px 4px #0002}.prof-header h1{margin:0;font-family:Georgia,serif;font-size:30px}.bell{margin-left:auto;font-size:25px}.dashboard-content,.messages-content,.grades-content{height:calc(100% - 80px);overflow:auto;padding:31px 29px}.toolbar,.grade-toolbar{display:flex;align-items:center;gap:32px;margin-bottom:26px}.search-box{width:320px;height:36px;display:flex;align-items:center;gap:10px;padding:0 12px;border:1px solid #777;border-radius:7px}.search-box svg{width:22px;height:22px;fill:none;stroke:#666;stroke-width:2}.search-box input{width:100%;border:0;outline:0;font-size:12px}.toolbar select{width:168px;height:36px;padding:0 10px;border:1px solid #777;border-radius:7px;background:#fff}.deadlines{margin-left:auto;align-self:flex-start;font-size:19px;font-weight:900}.tabs{width:392px;display:flex;margin-bottom:23px;border:1px solid #c5c5c5;border-radius:13px;overflow:hidden}.tabs button{flex:1;height:48px;border:0;background:#fff;font-size:17px;cursor:pointer}.tabs button.selected{background:#e0ffeb;color:#145b2f;border-bottom:2px solid #145b2f}.roster-panel{max-width:1010px;border:1px solid #bbb;border-radius:9px;overflow:hidden}.roster-heading{padding:15px 18px 12px;border-bottom:1px solid #bbb}.roster-heading h2{margin:0;font-size:27px}.roster-heading p{margin:2px 0 0;font-size:17px}.institute-line{height:55px;display:flex;align-items:center;gap:13px;padding:0 14px;border-bottom:1px solid #bbb;font-size:18px;font-weight:800}.institute-line span{font-size:24px}.year-line{display:flex;align-items:center;gap:16px;padding:14px 16px;background:#effff4;border-bottom:1px solid #bbb}.year-line strong{font-size:17px}.year-line button{padding:4px 18px;border:1px solid #bbb;border-radius:8px;background:#f2f2f2;cursor:pointer}.year-line button.chosen{background:#ffffbd;border-color:#b6b66e}.course-group{padding:15px 16px 27px;border-bottom:1px solid #bbb}.course-group h3{margin:0 0 17px;font-size:18px}.course-grid{display:flex;flex-wrap:wrap;gap:22px}.course-card{width:164px;min-height:68px;padding:5px;text-align:left;border:1px solid #c6c47b;border-radius:8px;background:#ffffcc;box-shadow:0 2px 3px #0003;cursor:pointer}.course-card small,.course-card strong,.course-card span{display:block}.course-card small{width:max-content;padding:1px 7px;border-radius:7px;background:#e3e3e3;font-size:9px}.course-card strong{margin:7px 0 4px;text-align:center;font-size:16px}.course-card span{font-size:8px;white-space:nowrap}.message-layout{display:grid;grid-template-columns:318px minmax(450px,1fr);gap:20px;max-width:1015px}.conversation-list,.conversation{min-height:325px;border:1px solid #ccc;border-radius:13px;box-shadow:0 2px 3px #0003;overflow:hidden}.conversation-list h2{margin:0;padding:14px 40px;border-bottom:1px solid #bbb;font-family:Georgia,serif;font-size:23px}.message-preview{display:block;width:calc(100% - 38px);margin:17px 19px;padding:10px 14px;text-align:left;border:1px solid #ddd;border-radius:8px;background:#fff;cursor:pointer}.message-preview.active{border-left:6px solid #27683f}.message-preview strong,.message-preview span,.message-preview small{display:block}.message-preview span{margin:3px 0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.message-preview small{color:#ef8e24;font-weight:800}.conversation-head{display:flex;align-items:center;gap:10px;padding:10px;border-bottom:1px solid #aaa}.avatar{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#264f39;color:#fff;font-weight:900}.conversation-head strong,.conversation-head small{display:block}.conversation-head select{margin-left:auto;width:108px}.chat{height:210px;padding:13px 16px}.chat-time{display:block;margin-bottom:10px;text-align:center;color:#777;font-size:10px}.chat p{max-width:315px;padding:9px 11px;border-radius:12px;font-size:14px}.incoming{border:1px solid #98af9d}.outgoing{margin:4px 0 0 auto;background:#506d5b;color:#fff}.reply{display:flex;gap:14px;padding:10px 16px}.reply input{flex:1;padding:10px;border:1px solid #aaa;border-radius:8px}.reply button,.grade-actions button{padding:8px 18px;border:1px solid #bbb;border-radius:7px;background:#fff;cursor:pointer}.reply button{border:0;background:#295d3e;color:#fff;font-weight:800}.back-link{padding:7px 13px;border:0;border-radius:14px;background:#d3f6df;color:#175d33;font-weight:800;cursor:pointer}.grade-toolbar{margin-top:56px}.grade-actions{display:flex;gap:8px}.add-button{background:#c4f0d1!important;border-color:#176337!important}.remove-button{background:#ff5c61!important;color:#fff}.grade-columns{display:grid;grid-template-columns:minmax(650px,1fr) 250px;gap:22px}.grade-table-card h2{margin:0 0 10px;font-family:Georgia,serif}.period-tabs{display:flex;width:386px;margin:0 0 10px 25px;padding:5px;border:1px solid #777;border-radius:20px}.period-tabs button{flex:1;border:0;border-radius:16px;background:#fff;padding:4px;cursor:pointer}.period-tabs button.chosen{background:#58c77e;color:#fff}.table-scroll{overflow:auto}.grade-table{width:100%;min-width:970px;border-collapse:collapse}.grade-table th,.grade-table td{border:1px solid #6b9875;text-align:center;font-size:12px}.grade-table th{height:29px;background:#cbf5d5}.grade-table td{height:30px}.grade-table th.wide{min-width:270px}.grade-table .name-cell{text-align:left;padding-left:7px}.grade-table input{width:35px;border:0;text-align:center;background:transparent}.summary-box{height:max-content;border:1px solid #333}.summary-box h2{margin:0;padding:4px;background:#b8e4c4;text-align:center;font-size:17px}.summary-box table{width:100%;border-collapse:collapse}.summary-box th,.summary-box td{padding:4px;border:1px solid #333;text-align:center;font-size:12px}.summary-box .total td{background:#b8e4c4;font-weight:900}@media(max-width:900px){.prof-sidebar{position:fixed;inset:0 auto 0 0;transform:translateX(-100%);transition:transform .2s}.prof-sidebar.open{transform:translateX(0)}.sidebar-overlay{position:fixed;inset:0;display:block;background:#0005;z-index:10}.mobile-hamburger{display:block;margin-right:12px}.toolbar{flex-wrap:wrap}.deadlines{display:none}.message-layout,.grade-columns{grid-template-columns:1fr}.summary-box{width:250px}.dashboard-content,.messages-content,.grades-content{padding:22px 16px}}@media(min-width:901px){.mobile-hamburger{display:none}}
 .institute-line{width:100%;border:0;border-bottom:1px solid #bbb;background:#fff;color:#111;font:inherit;text-align:left;cursor:pointer}.institute-line.expanded{background:#fff}.modal-backdrop{position:fixed;inset:0;z-index:30;display:grid;place-items:center;background:#0005}.finals-notice{width:min(470px,calc(100% - 32px));padding:18px 34px 22px;border-radius:15px;background:repeating-linear-gradient(135deg,#284b38 0,#284b38 13px,#2d563f 13px,#2d563f 26px);box-shadow:0 7px 20px #0006;color:#fff;text-align:center}.notice-icon{width:52px;height:52px;display:grid;place-items:center;margin:0 auto 12px;border-radius:50%;background:#fff;color:#111;font-size:27px}.finals-notice h2{margin:0 0 7px;color:#fff;font-size:21px}.finals-notice p{margin:0 auto 16px;max-width:345px;font-size:14px;line-height:1.25}.finals-notice strong{display:block;width:max-content;max-width:100%;margin:0 auto 14px;padding:5px 15px;border-radius:14px;background:#fff;color:#222;font-size:15px}.finals-notice button{padding:7px 25px;border:0;border-radius:14px;background:#fff;color:#222;font-weight:800;cursor:pointer}
-.grade-table-card{text-align:left}.student-entry-panel{position:fixed;right:24px;bottom:24px;z-index:10;width:320px;padding:16px;border:1px solid #c8d8cc;border-radius:8px;background:#fff;box-shadow:0 8px 24px #0002}.student-entry-panel h3{margin:0 0 12px}.student-entry-row{display:flex;gap:6px;margin-bottom:8px}.student-entry-row input{min-width:0;flex:1;padding:7px;border:1px solid #bbb;border-radius:4px}.student-entry-row button,.student-entry-panel>button{padding:7px 9px;border:0;border-radius:4px;background:#287442;color:#fff;cursor:pointer}.student-entry-panel>button+button{margin-left:6px}.submit-bottom,.save-draft{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:8px 13px;border:0;border-radius:6px;font-size:13px;font-weight:800;cursor:pointer}.submit-bottom{margin-left:8px;background:#69ae82;color:#fff}.save-draft{margin-left:16px;background:#e7e7e7;color:#222}
-.submission-notice{position:fixed;top:18px;left:50%;z-index:60;transform:translateX(-50%);padding:12px 18px;border-radius:8px;background:#287442;color:#fff;font-size:14px;font-weight:700;box-shadow:0 4px 14px #0003}
+.grade-table-card{text-align:left}.submit-action-wrap{display:flex;justify-content:flex-end;margin-top:14px;padding-top:8px}.submit-action-btn,.submit-bottom{display:inline-flex;align-items:center;justify-content:center;padding:12px 20px;border:1px solid #2d5d3d;border-radius:8px;background:#2d7b4a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.08)}.submit-action-btn:hover,.submit-bottom:hover{background:#246c3f}.save-draft{display:none!important}.submission-notice{position:fixed;top:18px;left:50%;z-index:60;transform:translateX(-50%);padding:12px 18px;border-radius:8px;background:#287442;color:#fff;font-size:14px;font-weight:700;box-shadow:0 4px 14px #0003}
 @media (max-width: 600px) {
   .prof-root { position: fixed; width: 100%; min-width: 0; }
   .prof-page { width: 100%; min-width: 0; }
@@ -169,8 +132,8 @@ function removeStudent(index) {
   .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .grade-table { min-width: 850px; }
   .summary-box { width: 100%; max-width: 280px; }
-  .submit-bottom,.save-draft { margin-top: 10px; font-size: 12px; }
-  .save-draft { margin-left: 0; }
+  .submit-bottom { margin-top: 10px; font-size: 12px; }
+  .save-draft { display: none !important; }
   .submit-bottom { margin-left: 5px; }
 }
 </style>
