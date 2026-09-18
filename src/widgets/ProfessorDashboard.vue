@@ -1,3 +1,4 @@
+.message-badge{position:absolute;top:2px;right:2px;min-width:19px;height:19px;padding:0 5px;border-radius:10px;background:#e44747;color:#fff;font-size:11px;line-height:19px;text-align:center}
 <template>
   <div class="prof-root">
     <div v-if="submissionNotice" class="submission-notice" role="status">Grades submitted successfully. Opening Registrar...</div>
@@ -7,9 +8,9 @@
       <div class="sidebar-rule"></div>
       <nav class="prof-nav" aria-label="Professor navigation">
         <button class="nav-button" :class="{ active: view === 'lists' || view === 'grades' }" type="button" aria-label="Class lists" @click="goToLists"><span v-if="view === 'lists' || view === 'grades'" class="active-bar"></span><svg viewBox="0 0 24 24"><rect x="4" y="4" width="5" height="5" /><rect x="15" y="4" width="5" height="5" /><rect x="4" y="15" width="5" height="5" /><rect x="15" y="15" width="5" height="5" /></svg></button>
-        <button class="nav-button" :class="{ active: view === 'messages' }" type="button" aria-label="Messages" @click="openMessages"><span v-if="view === 'messages'" class="active-bar"></span><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></svg></button>
+        <button class="nav-button" :class="{ active: view === 'messages' }" type="button" aria-label="Messages" @click="openMessages"><span v-if="view === 'messages'" class="active-bar"></span><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></svg><b v-if="unreadMessageCount" class="message-badge">{{ unreadMessageCount > 9 ? '9+' : unreadMessageCount }}</b></button>
       </nav>
-      <div class="prof-sidebar-footer"><div class="sidebar-rule footer-rule"></div><div class="prof-profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>{{ props.user?.name || 'PROFESSOR' }}</span></div><button class="logout-button" type="button" aria-label="Sign out" @click="signOut"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg></button></div>
+      <div class="prof-sidebar-footer"><div class="sidebar-rule footer-rule"></div><div class="prof-profile"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg><span>{{ props.user?.name || 'PROFESSOR' }}</span></div><button class="logout-button" type="button" aria-label="Sign out" @click.stop="signOut"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5" /><path d="M21 12H9" /></svg></button></div>
     </aside>
     <main class="prof-page">
       <header class="prof-header"><button v-if="isMobile" class="mobile-hamburger" type="button" aria-label="Open menu" @click="sidebarCollapsed = false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><h1>GRADE ENTRY</h1></header>
@@ -24,13 +25,15 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import { deleteMessage, getGradeSchedules, getGradeSheets, getMessages, getStudents, groupMessages, sendMessage, submitGradeSheet } from '../services/dataService'
+const activeRoster = ref([])
 const props = defineProps({ user: { type: Object, default: null } })
-const emit = defineEmits(['signout'])
+const emit = defineEmits(['signout', 'submitted'])
 const isMobile = ref(window.innerWidth <= 768); const sidebarCollapsed = ref(false); const view = ref('lists'); const tab = ref('lists'); const searchStudent = ref(''); const selectedSection = ref('all'); const selectedYear = ref('1st Year'); const expandedInstitute = ref(''); const messageAssessment = ref('Midterm'); const activePeriod = ref('midterm'); const selectedAssessment = ref('Q1'); const addChoiceOpen = ref(false); const removeChoiceOpen = ref(false); const restoreChoiceOpen = ref(false); const showFinalsNotice = ref(false); const submissionNotice = ref(false); const submissionSent = ref(false); const replyText = ref(''); const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']; const defaultGradeHeaders = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'A1', 'A2', 'A3', 'A4', 'R1', 'Mid Ex']; const gradeHeaders = reactive([...defaultGradeHeaders]); const midtermItems = [{ name: 'Quiz' }, { name: 'Activity' }, { name: 'Recitation' }, { name: 'Major Exam' }]
 const gradePeriods = ref([])
 const gradeSheets = ref([])
 const currentClock = ref(Date.now())
-const unreadMessages = computed(() => messages.filter(message => message.senderId !== props.user?.id).length)
+const unreadMessageIds = ref(new Set())
+const unreadMessageCount = computed(() => unreadMessageIds.value.size)
 
 function resolveDeadline(dateValue) {
   if (!dateValue) return null
@@ -107,13 +110,14 @@ const institutes = computed(() => {
 const selectedInstitute = computed(() => institutes.value.find(institute => institute.id === expandedInstitute.value) || institutes.value[0] || { groups: [] }); const visibleGroups = computed(() => (selectedInstitute.value.groups || []).map(group => ({ ...group, courses: group.courses.filter(course => selectedSection.value === 'all' || course.section.includes(selectedSection.value)) }))); const sections = computed(() => institutes.value.flatMap(institute => institute.groups.flatMap(group => group.courses.map(course => course.section)))); const messages = reactive([]); const openMessageMenuId = ref(null); const chatContainer = ref(null); const activeMessage = ref({ id: '', name: '', section: '', preview: '', course: { name: '', section: '' } }); const selectedCourse = ref({ name: '', section: '' }); const gradeStudents = reactive([]); const hasIncompleteGrades = computed(() => gradeStudents.length === 0 || gradeStudents.some(student => !String(student.id || '').trim() || !String(student.name || '').trim() || !String(student.midterm || '').trim() || !String(student.finals || '').trim() || !String(student.finalGrade || '').trim() || !String(student.gradePoint || '').trim())); const filteredMessages = computed(() => groupMessages(messages).map(thread => ({ id: thread.studentNumber || thread.key, name: thread.studentName || 'Student', section: thread.course.section, preview: thread.messages.at(-1)?.body || 'Photo attachment', course: thread.course, studentId: thread.studentId, studentNumber: thread.studentNumber, gradeSheetId: thread.gradeSheetId, senderId: thread.messages.at(-1)?.senderId, unreadCount: thread.unreadCount, messages: [...thread.messages].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || '')) })).filter(message => `${message.name} ${message.id}`.toLowerCase().includes(searchStudent.value.toLowerCase())).sort((left, right) => { const leftTime = left.messages.at(-1)?.createdAt || ''; const rightTime = right.messages.at(-1)?.createdAt || ''; return leftTime.localeCompare(rightTime) }));
 function scrollChatToBottom() {
   nextTick(() => {
-    if (!chatContainer.value) return
-    const container = chatContainer.value
+    const container = chatContainer.value || document.querySelector('.conversation .chat')
+    if (!container) return
     container.scrollTop = container.scrollHeight
   })
 }
 function openConversation(message) {
   activeMessage.value = message
+  unreadMessageIds.value = new Set([...unreadMessageIds.value].filter(id => !message.messages.some(item => String(item.id) === id)))
   openMessageMenuId.value = null
   scrollChatToBottom()
 }
@@ -127,6 +131,24 @@ function toggleMessageMenu(messageId) {
 
 function openGrades(course) {
   selectedCourse.value = course || selectedCourse.value
+  const sectionParts = String(selectedCourse.value.section || '').toUpperCase().split(' - ')
+  const classProgram = sectionParts[0] || ''
+  const classSection = sectionParts[1] || ''
+  const classYear = classSection.match(/[1-4]/)?.[0]
+  const classLetter = classSection.match(/[A-D]$/)?.[0]
+  const roster = allGradeStudents.filter(student => {
+    const studentCourse = String(student.course || '').toUpperCase()
+    const studentYear = String(student.year_level || '')
+    const studentSection = String(student.section || '').toUpperCase()
+    return (!studentCourse || !classProgram || classProgram.startsWith(studentCourse) || studentCourse.startsWith(classProgram))
+      && (!classYear || !studentYear || studentYear.startsWith(classYear))
+      && (!classLetter || !studentSection || studentSection === classLetter)
+  })
+  const savedRecords = new Map((selectedCourse.value.student_records || []).map(record => [record.id, record]))
+  const loadedRoster = roster.map(student => ({ ...student, ...(savedRecords.get(student.id) || {}), scores: { ...(student.scores || {}), ...(savedRecords.get(student.id)?.scores || {}) } }))
+  activeRoster.value = loadedRoster
+  originalGradeStudents.splice(0, originalGradeStudents.length, ...loadedRoster.map(student => ({ ...student, scores: { ...(student.scores || {}) } })))
+  gradeStudents.splice(0, gradeStudents.length, ...loadedRoster)
   activePeriod.value = 'midterm'
   view.value = 'grades'
 }
@@ -350,7 +372,7 @@ function restoreGrades() {
 
 watch(searchStudent, (query) => {
   const normalizedQuery = query.trim().toLowerCase()
-  const visibleStudents = allGradeStudents.filter(student => !normalizedQuery || `${student.id} ${student.name}`.toLowerCase().includes(normalizedQuery))
+  const visibleStudents = activeRoster.value.filter(student => !normalizedQuery || `${student.id} ${student.name}`.toLowerCase().includes(normalizedQuery))
   gradeStudents.splice(0, gradeStudents.length, ...visibleStudents)
 })
 
@@ -364,6 +386,10 @@ async function refreshProfessorMessages() {
     const activeKey = activeMessage.value.id
     const updatedThread = filteredMessages.value.find(message => message.id === activeKey || message.studentNumber === activeKey)
     if (updatedThread) activeMessage.value = updatedThread
+    unreadMessageIds.value = new Set(loadedMessages
+      .filter(message => message.senderId !== props.user?.id && !message.readAt && message.studentId !== activeMessage.value.studentId)
+      .map(message => String(message.id)))
+    if (updatedThread) scrollChatToBottom()
   } catch {
     // Keep the last saved conversation visible when the server is temporarily unavailable.
   }
@@ -381,13 +407,17 @@ onMounted(async () => {
     const schedules = schedulesResult.value
     const sheets = sheetsResult.value
     const loadedMessages = messagesResult.status === 'fulfilled' ? messagesResult.value : []
-    const records = students.map(student => ({ id: student.student_id, name: student.name, midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: {} }))
+    const records = students.map(student => ({ id: student.student_id, name: student.name, institute: student.institute, course: student.course, year_level: student.year_level, section: student.section, midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: {} }))
     originalGradeStudents.splice(0, originalGradeStudents.length, ...records.map(student => ({ ...student, scores: { ...student.scores } })))
     allGradeStudents.splice(0, allGradeStudents.length, ...records)
+    activeRoster.value = records
     gradeStudents.splice(0, gradeStudents.length, ...records)
     gradePeriods.value = schedules.filter(schedule => schedule.yearLevel === 'Grade Period')
     gradeSheets.value = sheets
     messages.splice(0, messages.length, ...loadedMessages.map(message => ({ ...message, id: String(message.id), name: message.studentName || '', section: message.gradeSheet?.section || '', preview: message.body || 'Photo attachment', course: { name: message.gradeSheet?.subject || '', section: message.gradeSheet?.section || '' }, studentId: message.studentId, studentNumber: message.studentNumber, gradeSheetId: message.gradeSheet?.id, senderId: message.senderId })))
+    unreadMessageIds.value = new Set(loadedMessages
+      .filter(message => message.senderId !== props.user?.id && !message.readAt)
+      .map(message => String(message.id)))
     messageRefreshTimer = window.setInterval(refreshProfessorMessages, 5000)
   } catch (error) {
     window.alert(error instanceof Error ? error.message : 'Unable to load students.')
@@ -523,4 +553,331 @@ onUnmounted(() => {
 .conversation{display:flex;flex-direction:column}.conversation-head,.reply{flex-shrink:0}.chat{min-height:0;overflow-y:auto;flex:1}
 .message-layout .conversation{height:520px;min-height:0}.message-layout .chat{height:auto;min-height:0;flex:1;overflow-y:auto;overflow-x:hidden}
 @media (max-width: 600px){.message-layout .conversation{height:520px}.message-layout .chat{height:auto;min-height:0}}
+
+.institute-line {
+  border-left: 6px solid transparent;
+  transition: background .18s ease, color .18s ease, border-color .18s ease;
+}
+
+.roster-panel > .institute-line:nth-of-type(1) {
+  border-left-color: #e4c52f;
+  color: #806d08;
+}
+
+.roster-panel > .institute-line:nth-of-type(2) {
+  border-left-color: #ef8a2f;
+  color: #a84f0b;
+}
+
+.roster-panel > .institute-line:nth-of-type(3) {
+  border-left-color: #4aa8dc;
+  color: #17658e;
+}
+
+.roster-panel > .institute-line:nth-of-type(1):hover,
+.roster-panel > .institute-line:nth-of-type(1).expanded {
+  background: #fffbe1;
+  color: #6f5e00;
+}
+
+.roster-panel > .institute-line:nth-of-type(2):hover,
+.roster-panel > .institute-line:nth-of-type(2).expanded {
+  background: #fff1df;
+  color: #934307;
+}
+
+.roster-panel > .institute-line:nth-of-type(3):hover,
+.roster-panel > .institute-line:nth-of-type(3).expanded {
+  background: #e7f5fc;
+  color: #125878;
+}
+
+.institute-line.institute-ics {
+  border-left-color: #ef8a2f;
+  color: #a84f0b;
+}
+
+.institute-line.institute-ics.expanded,
+.institute-line.institute-ics:hover {
+  background: #fff1df;
+  color: #934307;
+}
+
+.institute-line.institute-ibe {
+  border-left-color: #e4c52f;
+  color: #806d08;
+}
+
+.institute-line.institute-ibe.expanded,
+.institute-line.institute-ibe:hover {
+  background: #fffbe1;
+  color: #6f5e00;
+}
+
+.institute-line.institute-ite {
+  border-left-color: #4aa8dc;
+  color: #17658e;
+}
+
+.institute-line.institute-ite.expanded,
+.institute-line.institute-ite:hover {
+  background: #e7f5fc;
+  color: #125878;
+}
+
+.year-line {
+  background: linear-gradient(90deg, #eff8f1 0%, #f8fcf9 100%);
+  border-top: 1px solid #d7e7da;
+  border-bottom: 1px solid #c9dfcf;
+  color: #215c37;
+}
+
+.year-line strong {
+  color: #18562f;
+  letter-spacing: 0.04em;
+}
+
+.year-line button {
+  border-color: #bfd4c4;
+  background: #ffffff;
+  color: #356247;
+}
+
+.year-line button:hover,
+.year-line button.chosen {
+  border-color: #d6b928;
+  background: #fff8c9;
+  color: #705f00;
+}
+
+.course-group {
+  background: linear-gradient(135deg, #f8fcf8 0%, #edf7ef 100%);
+  border-bottom: 1px solid #d2e5d6;
+}
+
+.course-group h3 {
+  color: #145d31;
+  letter-spacing: 0.06em;
+}
+
+.course-card {
+  border: 1px solid #c4dcc9;
+  border-top: 4px solid #4ca968;
+  background: #ffffff;
+  color: #174e2d;
+}
+
+.course-card:hover {
+  border-color: #3b9a59;
+  border-top-color: #e1bd24;
+  background: #fffef1;
+  box-shadow: 0 8px 18px rgba(50, 113, 67, 0.14);
+  transform: translateY(-2px);
+}
+
+.course-card small {
+  color: #2a7a45;
+  font-weight: 800;
+}
+
+.course-card strong {
+  color: #174e2d;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(1).expanded) .course-group {
+  background: linear-gradient(135deg, #fffdf0 0%, #fff8d6 100%);
+  border-bottom-color: #eadb82;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(1).expanded) .course-card {
+  border-color: #e6d77b;
+  border-top-color: #d8b923;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(2).expanded) .course-group {
+  background: linear-gradient(135deg, #fff8ef 0%, #ffecd9 100%);
+  border-bottom-color: #efc49a;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(2).expanded) .course-card {
+  border-color: #e9bd8b;
+  border-top-color: #ed8125;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(3).expanded) .course-group {
+  background: linear-gradient(135deg, #f1faff 0%, #e0f2fb 100%);
+  border-bottom-color: #add7eb;
+}
+
+.roster-panel:has(.institute-line:nth-of-type(3).expanded) .course-card {
+  border-color: #a9d5e9;
+  border-top-color: #3f9fd2;
+}
+
+.prof-root {
+  background: #f5f8f5;
+  color: #183326;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.prof-page {
+  background: #f5f8f5;
+}
+
+.prof-header {
+  background: #ffffff;
+  border-bottom-color: #d9e6dc;
+}
+
+.prof-header h1 {
+  color: #164b2b;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-content,
+.messages-content,
+.grades-content {
+  color: #274936;
+}
+
+.toolbar,
+.grade-toolbar {
+  color: #365c45;
+}
+
+.search-box {
+  border-color: #b8cfbf;
+  background: #ffffff;
+  color: #245638;
+}
+
+.search-box input {
+  color: #214732;
+}
+
+.search-box input::placeholder {
+  color: #7b9683;
+}
+
+.tabs {
+  border-color: #bfd5c5;
+  background: #eaf4ed;
+}
+
+.tabs button {
+  color: #4d6d59;
+}
+
+.tabs button.selected {
+  background: #ccefd7;
+  color: #125d30;
+}
+
+.roster-panel,
+.conversation-list,
+.conversation {
+  border-color: #c7dbcc;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(31, 82, 49, 0.07);
+}
+
+.roster-heading h2,
+.conversation-list h2 {
+  color: #185b32;
+}
+
+.roster-heading p,
+.course-card span,
+.message-preview small {
+  color: #6c8875;
+}
+
+.institute-line {
+  border-bottom-color: #d7e5da;
+  color: #245538;
+}
+
+.institute-line:hover,
+.course-card:hover,
+.message-preview:hover {
+  background: #f0f8f2;
+}
+
+.year-line,
+.course-group {
+  background: #f7fbf8;
+  border-color: #d7e7da;
+}
+
+.year-line strong,
+.course-group h3 {
+  color: #26623c;
+}
+
+.course-card {
+  border-color: #c5dccb;
+  background: #ffffff;
+  color: #1f4e32;
+  box-shadow: 0 4px 12px rgba(31, 82, 49, 0.06);
+}
+
+.course-card small {
+  color: #18703a;
+}
+
+.message-preview {
+  border-color: #d6e5d9;
+  color: #244d34;
+}
+
+.message-preview.active {
+  border-left-color: #2b9a55;
+  background: #ecf8ef;
+}
+
+.message-preview strong,
+.conversation-head strong {
+  color: #174e2d;
+}
+
+.message-preview span,
+.conversation-head small,
+.chat-time,
+.message-empty {
+  color: #708b79;
+}
+
+.conversation-head {
+  background: #f2faf4;
+  border-bottom-color: #d5e6d9;
+}
+
+.reply input,
+.conversation-head select {
+  border-color: #bcd4c2;
+  color: #234d32;
+}
+
+.prof-sidebar-footer {
+  position: relative;
+  z-index: 25;
+}
+
+.logout-button {
+  position: relative;
+  z-index: 26;
+  width: 58px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  pointer-events: auto;
+  color: #ffffff;
+}
+
+.logout-button:hover,
+.logout-button:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 9px;
+  outline: none;
+}
 </style>

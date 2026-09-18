@@ -21,9 +21,6 @@ class MessageController extends Controller
             : $query->where('professor_id', $user->id);
 
         $records = $messages->latest()->get();
-        if ($user->role === 'professor') {
-            $records->filter(fn (Message $message): bool => !$message->read_at && (int) $message->sender_id !== (int) $user->id)->each(fn (Message $message) => $message->forceFill(['read_at' => now()])->save());
-        }
 
         return response()->json(['messages' => $records->map(fn (Message $message) => $this->serialize($message))]);
     }

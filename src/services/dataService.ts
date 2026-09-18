@@ -246,8 +246,13 @@ export async function sendMessage(message: { professorId?: number; studentId?: n
   if (message.body) body.append('body', message.body)
   if (message.attachment) body.append('attachment', message.attachment)
   const response = await fetch(apiUrl('/messages'), { method: 'POST', headers: authHeaders(), body })
-  const payload = await parseApiResponse<{ message: MessageRecord; message_error?: string }>(response)
-  if (!response.ok) throw new Error(payload.message_error || 'Unable to send message.')
+  const payload = await parseApiResponse<{ message?: MessageRecord | string; message_error?: string; errors?: Record<string, string[]> }>(response)
+  if (!response.ok) {
+    const validationMessage = Object.values(payload.errors || {}).flat()[0]
+    const serverMessage = typeof payload.message === 'string' ? payload.message : undefined
+    throw new Error(payload.message_error || serverMessage || validationMessage || 'Unable to send message.')
+  }
+  if (!payload.message || typeof payload.message === 'string') throw new Error('The server returned an invalid message response.')
   return payload.message
 }
 
@@ -331,6 +336,6 @@ export function getInstitutes() {
   return [
     { id: 'ibe', short: 'IBE', name: 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP', color: '#fbff78' },
     { id: 'ics', short: 'ICS', name: 'INSTITUTE OF COMPUTING SCIENCE', color: '#ffdd88' },
-    { id: 'ioe', short: 'IOE', name: 'INSTITUTE OF EDUCATION', color: '#5ec7ee' },
+    { id: 'ite', short: 'ITE', name: 'INSTITUTE OF TEACHERS EDUCATION', color: '#5ec7ee' },
   ]
 }

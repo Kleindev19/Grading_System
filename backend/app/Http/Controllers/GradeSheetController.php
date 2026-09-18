@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeSheet;
-use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -38,7 +37,7 @@ class GradeSheetController extends Controller
             'students' => ['required', 'integer', 'min:1'],
             'units' => ['required', 'integer', 'min:1'],
             'student_records' => ['required', 'array', 'min:1'],
-            'student_records.*.id' => ['required', 'string', 'max:80'],
+            'student_records.*.id' => ['required', 'string', 'max:80', 'distinct'],
             'student_records.*.name' => ['required', 'string', 'max:255'],
             'student_records.*.midterm' => ['required', 'string', 'max:40'],
             'student_records.*.finals' => ['required', 'string', 'max:40'],
@@ -47,6 +46,12 @@ class GradeSheetController extends Controller
             'student_records.*.remarks' => ['nullable', 'string', 'max:255'],
             'student_records.*.scores' => ['sometimes', 'array'],
         ]);
+
+        abort_if(
+            (int) $data['students'] !== count($data['student_records']),
+            422,
+            'The student count must match the submitted student records.',
+        );
 
         $sheet = GradeSheet::updateOrCreate(
             ['code' => $data['code'], 'section' => $data['section'], 'professor_id' => $user->id],
@@ -77,6 +82,21 @@ class GradeSheetController extends Controller
             'status' => ['required', 'in:Approved,Published,Submitted'],
             'rejection_reason' => ['nullable', 'string', 'max:1000'],
         ]);
+
+        if (in_array($gradeSheet->status, ['Approved', 'Published'], true) && $data['status'] === 'Submitted') {
+            return response()->json(['message' => 'Approved or published grade sheets cannot be rejected.'], 422);
+        }
+
+        $validTransition = match ($gradeSheet->status) {
+            'Submitted' => in_array($data['status'], ['Submitted', 'Approved'], true),
+            'Approved' => in_array($data['status'], ['Approved', 'Published'], true),
+            'Published' => $data['status'] === 'Published',
+            default => false,
+        };
+
+        if (!$validTransition) {
+            return response()->json(['message' => "Cannot change a {$gradeSheet->status} grade sheet to {$data['status']}."], 422);
+        }
 
         if ($data['status'] === 'Published') {
             $gradeSheet->load('studentsList');

@@ -65,21 +65,35 @@
       <section v-if="currentView === 'institute'" class="institute-view">
         <div class="building-lines" aria-hidden="true"></div>
         <div class="institute-content">
-          <h2>INSTITUTE</h2>
+          <h2>GRADE MANAGEMENT</h2>
           <div class="institute-grid">
             <button
-              v-for="institute in institutes"
+              v-for="institute in instituteCards"
               :key="institute.id"
               class="institute-card"
+              :class="`institute-card-${institute.id}`"
               :style="{ '--accent': institute.color }"
               type="button"
               @pointerup.stop="selectInstitute(institute)"
             >
               <div class="card-accent"></div>
-              <div class="card-white"></div>
               <div class="institute-seal" :class="institute.id">
-                <img :src="colegioLogo" :alt="institute.name" />
-                <span>{{ institute.short }}</span>
+                <img :src="institute.logo" :alt="institute.name" />
+              </div>
+
+              <div class="institute-panel-body">
+                <div class="institute-card-title">{{ institute.name }}</div>
+                <div class="meta-row">
+                  <div class="meta-label-wrap">
+                    <span class="meta-label">Section</span>
+                    <span class="meta-value">{{ institute.sections }}</span>
+                  </div>
+                  <div class="meta-label-wrap">
+                    <span class="meta-label">Students</span>
+                    <span class="meta-value">{{ institute.students }}</span>
+                  </div>
+                </div>
+                <div class="manage-button">Manage Grades</div>
               </div>
             </button>
           </div>
@@ -215,7 +229,7 @@
                     <select v-model="scheduleDraft(group).semester" aria-label="Semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select>
                     <select v-model="scheduleDraft(group).yearLevel" aria-label="Year Level"><option>Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select>
                     <input v-model="scheduleDraft(group).releasedDate" type="date" aria-label="Released Date" required />
-                    <button class="add-release-button" type="submit">+ Add Schedule</button>
+                    <button class="add-release-button pending-release-button" type="submit" :disabled="!canReleaseGroup(group)">+ Add Schedule</button>
                   </form>
                 </article>
                 <p v-if="pendingScheduleGroups.length === 0" class="release-empty">No approved sections waiting for a schedule.</p>
@@ -257,7 +271,7 @@
                     <span><b class="schedule-status" :class="schedule.status.toLowerCase()">{{ schedule.status }}</b></span>
                     <span>
                       <button v-if="schedule.status === 'Scheduled'" class="release-now-button" type="button" :disabled="!isReleaseAvailable(schedule)" :title="isReleaseAvailable(schedule) ? 'Release this schedule' : `Available on ${schedule.releasedDate}`" @click="releaseNow(schedule)">{{ isReleaseAvailable(schedule) ? 'Release Now' : 'Scheduled' }}</button>
-                      <span v-else class="released-label">Released</span>
+                      <button v-else class="released-label" type="button" disabled>Released</button>
                     </span>
                   </div>
                   <p v-if="year.schedules.length === 0" class="release-empty">No release schedule added.</p>
@@ -439,7 +453,7 @@
             </table>
 
             <div class="modal-actions">
-              <button class="approve-button" type="button" @click="changeStatus('Approved')">
+              <button class="approve-button" type="button" :disabled="reviewSheet.status !== 'Submitted'" @click="changeStatus('Approved')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
                   <path d="m14 15 2 2 5-6" />
@@ -447,7 +461,7 @@
                 </svg>
                 Approve Grades
               </button>
-              <button class="reject-button" type="button" @click="changeStatus('Submitted')">
+              <button class="reject-button" type="button" :disabled="reviewSheet.status !== 'Submitted'" :title="reviewSheet.status !== 'Submitted' ? 'Only submitted grades can be rejected.' : 'Reject and return to professor'" @click="changeStatus('Submitted')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="m15 9-6 6M9 9l6 6" />
@@ -466,6 +480,9 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
+import ibeLogo from '../logo/ibe-logo.png'
+import icsLogo from '../logo/ics-logo.png'
+import iteLogo from '../logo/ite-logo.png'
 
 const props = defineProps({ user: { type: Object, default: null } })
 defineEmits(['signout'])
@@ -498,15 +515,38 @@ const periodForm = ref({
 })
 const editingPeriodId = ref(null)
 const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
-const institutes = getInstitutes()
+const instituteLogos = { ibe: ibeLogo, ics: icsLogo, ite: iteLogo }
+const institutes = getInstitutes().map(institute => ({ ...institute, logo: instituteLogos[institute.id] }))
+
+const instituteCards = computed(() => institutes.map((institute) => {
+  const matchingSheets = gradeSheets.value.filter(sheet => instituteMatches(sheet, institute))
+  const matchingStudents = students.value.filter(student => instituteMatches(student, institute))
+  const sections = new Set([
+    ...matchingStudents.map(student => student.section).filter(Boolean),
+    ...matchingSheets.map(sheet => sheet.section).filter(Boolean),
+  ])
+  const studentIds = new Set([
+    ...matchingStudents.map(student => student.student_id).filter(Boolean),
+    ...matchingSheets.flatMap(sheet => (sheet.student_records || []).map(record => record.id)).filter(Boolean),
+  ])
+
+  return {
+    ...institute,
+    sections: sections.size || 0,
+    students: studentIds.size,
+  }
+}))
 
 function instituteMatches(value, institute) {
+  const directInstitute = String(value?.institute || '').trim().toUpperCase()
+  if (directInstitute) return directInstitute === institute.short
+
   const text = `${value?.code || ''} ${value?.subject || ''} ${value?.name || ''} ${value?.section || ''}`.toLowerCase()
   const isComputing = /\bbsit\b|\bitfund\b|\bit\d+\b|comput/.test(text)
   const isEducation = /\bbeed\b|\bbed\b|education|edu\d+|teacher/.test(text)
   const isBusiness = /\bbsba\b|business|buslaw|finacc|entrepreneur/.test(text)
   if (institute.id === 'ics') return isComputing && !isEducation
-  if (institute.id === 'ioe') return isEducation && !isComputing
+  if (institute.id === 'ite') return isEducation && !isComputing
   if (institute.id === 'ibe') return isBusiness && !isComputing && !isEducation
   return false
 }
@@ -573,13 +613,14 @@ let releaseClock
 let dataRefreshTimer
 
 async function refreshRegistrarData() {
-  const [gradeSheetsResult, schedulesResult] = await Promise.allSettled([getGradeSheets(), getGradeSchedules()])
+  const [gradeSheetsResult, studentsResult, schedulesResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules()])
   if (gradeSheetsResult.status === 'fulfilled') {
     gradeSheets.value = gradeSheetsResult.value
     if (reviewSheet.value?.id) {
       reviewSheet.value = gradeSheetsResult.value.find(sheet => sheet.id === reviewSheet.value.id) || reviewSheet.value
     }
   }
+  if (studentsResult.status === 'fulfilled') students.value = studentsResult.value
   if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
 }
 
@@ -734,6 +775,10 @@ function openReview(sheet) {
 
 async function changeStatus(status) {
   if (!reviewSheet.value?.id) return
+  if (reviewSheet.value.status !== 'Submitted' && status !== reviewSheet.value.status) {
+    window.alert(`Cannot change a ${reviewSheet.value.status} grade sheet to ${status}.`)
+    return
+  }
 
   try {
     const updated = await updateGradeSheetStatus(reviewSheet.value.id, status)
@@ -764,6 +809,11 @@ function scheduleMatchesInstitute(schedule, institute) {
     const sheet = gradeSheets.value.find(item => `sheet:${item.id}` === course)
     return sheet ? instituteMatches(sheet, institute) : false
   })
+}
+
+function canReleaseGroup(group) {
+  const draft = scheduleDraft(group)
+  return Boolean(draft.schoolYear.trim() && draft.semester !== 'Semester' && draft.yearLevel !== 'Year' && draft.releasedDate)
 }
 
 async function addRelease(group) {
@@ -1027,23 +1077,11 @@ async function saveGradePeriod() {
   position: relative;
   flex: 1;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(174, 216, 195, 0.72), rgba(174, 216, 195, 0.72)),
-    linear-gradient(118deg, transparent 0 42%, rgba(255, 255, 255, 0.4) 42% 44%, transparent 44% 100%),
-    linear-gradient(90deg, #cedbd2 0%, #9eb8aa 52%, #7f9d90 100%);
+  background: #ffffff;
 }
 
 .building-lines {
-  position: absolute;
-  inset: 0;
-  opacity: 0.44;
-  pointer-events: none;
-  background:
-    linear-gradient(90deg, transparent 0 7%, rgba(255, 255, 255, 0.55) 7% 8%, transparent 8% 15%, rgba(255, 255, 255, 0.55) 15% 16%, transparent 16% 100%),
-    repeating-linear-gradient(0deg, transparent 0 84px, rgba(255, 255, 255, 0.8) 84px 91px, transparent 91px 156px),
-    repeating-linear-gradient(90deg, transparent 0 90px, rgba(24, 58, 41, 0.28) 90px 96px, transparent 96px 168px);
-  transform: skewX(-8deg) scale(1.12);
-  transform-origin: 20% 20%;
+  display: none;
 }
 
 .institute-content {
@@ -1053,82 +1091,186 @@ async function saveGradePeriod() {
   min-height: 100%;
   flex-direction: column;
   align-items: center;
-  padding: 151px 78px 80px;
+  padding: 20px 48px 28px;
 }
 
 .institute-content h2 {
-  margin: 0 0 28px;
-  color: #114c2b;
-  font-size: 51px;
-  line-height: 1;
-  font-weight: 900;
-  letter-spacing: 0;
-  text-shadow: 2px 3px 0 rgba(255, 255, 255, 0.45), 0 2px 2px rgba(0, 0, 0, 0.25);
+  display: none;
 }
 
 .institute-grid {
   position: relative;
   z-index: 2;
   width: 100%;
-  max-width: 997px;
+  max-width: 1000px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(240px, 1fr));
-  gap: 73px;
+  grid-template-columns: repeat(3, minmax(210px, 1fr));
+  gap: 28px;
 }
 
 .institute-card {
   position: relative;
   z-index: 2;
   pointer-events: auto;
-  height: 196px;
+  height: 238px;
+  padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(24, 24, 24, 0.35);
-  border-radius: 34px;
-  background: #f4f4f4;
-  box-shadow: 0 4px 3px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(18, 75, 42, 0.72);
+  border-radius: 22px;
+  background: var(--accent);
+  box-shadow: 0 3px 2px rgba(0, 0, 0, 0.28);
   cursor: pointer;
+  text-align: left;
 }
 
 .card-accent {
   position: absolute;
-  inset: 0 0 auto;
-  height: 88px;
+  inset: 0;
+  height: 108px;
   background: var(--accent);
   pointer-events: none;
 }
 
-.card-white {
+.institute-panel-body {
   position: absolute;
-  left: -7%;
-  right: -7%;
-  bottom: -1px;
-  height: 105px;
-  border-radius: 50% 50% 0 0 / 40% 40% 0 0;
-  background: rgba(249, 249, 249, 0.92);
-  pointer-events: none;
+  z-index: 3;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 124px;
+  padding: 20px 12px 10px;
+  border-radius: 38px 38px 0 0;
+  border-top: 1px solid rgba(17, 66, 42, 0.22);
+  background: rgba(250, 250, 250, 0.96);
+}
+
+.institute-card-title {
+  margin: 0 0 9px;
+  padding: 0 4px;
+  color: #142d20;
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px 10px;
+  color: #0f2f1b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.meta-label-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+.meta-label {
+  color: #2d4f3d;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.meta-value {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.manage-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 29px;
+  margin: 0 16px 0;
+  border-radius: 5px;
+  background: #ccebcf;
+  color: #1b5f3a;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .institute-seal {
   position: absolute;
-  inset: 0;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
   display: grid;
   place-items: center;
+  width: 118px;
+  height: 118px;
   pointer-events: none;
+  z-index: 2;
 }
 
 .institute-seal img {
-  width: 150px;
-  height: 150px;
+  width: 118px;
+  height: 118px;
   object-fit: contain;
-  opacity: 0.72;
+  opacity: 0.9;
 }
 
 .institute-seal span {
   position: absolute;
-  color: #0c4226;
-  font-size: 25px;
+  color: #0d3e26;
+  font-size: 15px;
   font-weight: 900;
-  letter-spacing: 0;
+}
+
+.institute-card.institute-card-ibe {
+  border-color: #d1c15a;
+}
+
+.institute-card.institute-card-ibe .institute-card-title,
+.institute-card.institute-card-ibe .meta-value,
+.institute-card.institute-card-ibe .manage-button,
+.institute-card.institute-card-ibe .meta-label {
+  color: #745d00;
+}
+
+.institute-card.institute-card-ibe .manage-button {
+  background: #d6f0b4;
+}
+
+.institute-card.institute-card-ics {
+  border-color: #dca55d;
+}
+
+.institute-card.institute-card-ics .institute-card-title,
+.institute-card.institute-card-ics .meta-value,
+.institute-card.institute-card-ics .manage-button,
+.institute-card.institute-card-ics .meta-label {
+  color: #7c4300;
+}
+
+.institute-card.institute-card-ics .manage-button {
+  background: #f4d0a2;
+}
+
+.institute-card.institute-card-ite {
+  border-color: #71bde6;
+}
+
+.institute-card.institute-card-ite .institute-card-title,
+.institute-card.institute-card-ite .meta-value,
+.institute-card.institute-card-ite .manage-button,
+.institute-card.institute-card-ite .meta-label {
+  color: #1d5477;
+}
+
+.institute-card.institute-card-ite .manage-button {
+  background: #cfeeff;
 }
 
 .management-view {
@@ -1922,6 +2064,11 @@ async function saveGradePeriod() {
   white-space: nowrap;
 }
 
+.pending-schedule-card .add-release-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .release-form-title {
   margin: -1px 0 8px;
   color: #111111;
@@ -2153,6 +2300,10 @@ async function saveGradePeriod() {
 
 .release-now-button {
   padding: 7px 10px;
+}
+
+.pending-release-button {
+  min-width: 118px;
 }
 
 .released-label {
@@ -2632,6 +2783,13 @@ async function saveGradePeriod() {
   color: #d84f58;
 }
 
+.approve-button:disabled,
+.reject-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  filter: grayscale(0.35);
+}
+
 .approve-button svg,
 .reject-button svg {
   width: 27px;
@@ -2883,7 +3041,38 @@ async function saveGradePeriod() {
   }
 
   .institute-card {
-    height: 176px;
+    height: 190px;
+  }
+
+  .institute-seal {
+    top: 8px;
+    width: 112px;
+    height: 112px;
+  }
+
+  .institute-seal img {
+    width: 112px;
+    height: 112px;
+    opacity: 0.38;
+  }
+
+  .institute-panel-body {
+    min-height: 106px;
+    padding-top: 18px;
+    background: rgba(250, 250, 250, 0.93);
+  }
+
+  .institute-card-title {
+    font-size: 13px;
+    margin-bottom: 7px;
+  }
+
+  .meta-row {
+    padding-bottom: 7px;
+  }
+
+  .manage-button {
+    height: 27px;
   }
 
   .release-fields {

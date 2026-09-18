@@ -61,14 +61,21 @@ class GradeScheduleController extends Controller
                 ->whereIn('id', $sheetIds)
                 ->update(['status' => 'Published']);
         } else {
-            $semester = str_ireplace('semester', 'sem', $schedule->semester);
+            $courseCodes = collect($schedule->courses ?? [])
+                ->filter(fn (string $course): bool => !str_starts_with($course, 'sheet:'))
+                ->values();
 
-            $this->completeApprovedSheets(GradeSheet::query())
-                ->where(function ($query) use ($schedule, $semester) {
-                    $query->where('semester', $schedule->semester)
-                        ->orWhere('semester', 'like', $semester . '%');
-                })
-                ->update(['status' => 'Published']);
+            if ($courseCodes->isNotEmpty()) {
+                $semesterPrefix = str_ireplace('semester', 'sem', $schedule->semester);
+                $this->completeApprovedSheets(GradeSheet::query())
+                    ->where(function ($query) use ($schedule, $semesterPrefix) {
+                        $query->where('semester', $schedule->semester)
+                            ->orWhere('semester', 'like', $schedule->semester . '%')
+                            ->orWhere('semester', 'like', $semesterPrefix . '%');
+                    })
+                    ->whereIn('code', $courseCodes)
+                    ->update(['status' => 'Published']);
+            }
         }
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);

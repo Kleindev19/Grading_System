@@ -1,5 +1,8 @@
 <template>
   <div class="student-root">
+    <div class="page-watermark" aria-hidden="true">
+      <span v-for="index in 15" :key="index">COLEGIO DE MONTALBAN</span>
+    </div>
     <div v-if="sidebarOpen" class="sidebar-overlay" @click="toggleSidebar"></div>
 
     <aside class="student-sidebar" :class="{ open: sidebarOpen }">
@@ -118,7 +121,6 @@
         </div>
 
         <section ref="publishedPanel" class="published-panel">
-          <div class="grades-watermark" aria-hidden="true">COLEGIO DE MONTALBAN</div>
           <div class="panel-head">
             <h2>PUBLISHED GRADES</h2>
             <select v-model="semester" aria-label="Semester">
@@ -292,12 +294,15 @@ onMounted(async () => {
     })
     const expectedSubjectCount = expectedCourses.size || publishedGrades.value.length
     const allGradesComplete = completedGrades.length === expectedSubjectCount && completedGrades.length > 0
-    const gradePoints = completedGrades.map(sheet => Number(sheet.student_records?.[0]?.gradePoint)).filter(Number.isFinite)
+    const gradeRows = completedGrades.map(sheet => ({
+      point: Number(sheet.student_records?.[0]?.gradePoint),
+      units: Number(sheet.units) || 0,
+    })).filter(row => Number.isFinite(row.point) && row.units > 0)
     enrolledSubjects.value = expectedSubjectCount
     totalUnits.value = publishedGrades.value.reduce((total, sheet) => total + (Number(sheet.units) || 0), 0)
     studentStatus.value = expectedSubjectCount && !allGradesComplete ? 'Incomplete' : publishedGrades.value.length ? 'Active' : 'No records'
-    gwa.value = allGradesComplete
-      ? (gradePoints.reduce((total, point) => total + point, 0) / gradePoints.length).toFixed(2)
+    gwa.value = allGradesComplete && gradeRows.length > 0
+      ? (gradeRows.reduce((total, row) => total + row.point * row.units, 0) / gradeRows.reduce((total, row) => total + row.units, 0)).toFixed(2)
       : '-'
     messageRefreshTimer = window.setInterval(refreshMessages, 5000)
   } catch {
@@ -541,6 +546,7 @@ function signOut(){
 }
 
 .student-page {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -549,7 +555,32 @@ function signOut(){
   overflow: hidden;
 }
 
+.page-watermark {
+  position: fixed;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(5, minmax(0, 1fr));
+  align-items: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 70px 40px 40px 105px;
+  color: #174b2a;
+  font-size: clamp(14px, 1.7vw, 25px);
+  font-weight: 900;
+  letter-spacing: 1px;
+  opacity: 0.07;
+  pointer-events: none;
+}
+
+.page-watermark span {
+  transform: rotate(-18deg);
+  white-space: nowrap;
+}
+
 .student-header {
+  position: relative;
   height: 50px;
   flex: 0 0 50px;
   display: flex;
@@ -583,10 +614,12 @@ function signOut(){
 }
 
 .grades-body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   overflow: auto;
   padding: 16px 17px 30px;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .intro-row h2 {
@@ -713,21 +746,6 @@ function signOut(){
   border: 1px solid #1c5a34;
   border-radius: 9px 9px 0 0;
   background: #ffffff;
-}
-
-.grades-watermark {
-  position: absolute;
-  top: 52%;
-  left: 50%;
-  z-index: 0;
-  color: #174b2a;
-  font-size: clamp(28px, 5vw, 72px);
-  font-weight: 900;
-  letter-spacing: 2px;
-  opacity: 0.07;
-  pointer-events: none;
-  transform: translate(-50%, -50%) rotate(-18deg);
-  white-space: nowrap;
 }
 
 .panel-head {

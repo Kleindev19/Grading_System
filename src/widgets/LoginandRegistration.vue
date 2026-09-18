@@ -247,7 +247,7 @@ async function restoreSession() {
     if (!response.ok) throw new Error('Session expired.')
     user.value = (await parseApiResponse<{ user: typeof user.value }>(response)).user
   } catch {
-    localStorage.removeItem('auth_token')
+    if (localStorage.getItem('auth_token') === token) localStorage.removeItem('auth_token')
   }
 }
 
