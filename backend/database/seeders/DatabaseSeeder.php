@@ -55,7 +55,15 @@ class DatabaseSeeder extends Seeder
 
         Student::updateOrCreate(
             ['student_id' => '23-00001'],
-            ['name' => $studentUser->name, 'created_by' => $registrar->id],
+            [
+                'name' => $studentUser->name,
+                'institute' => 'IBE',
+                'course' => 'BSBA',
+                'year_level' => '1st Year',
+                'section' => 'A',
+                'status' => 'Active',
+                'created_by' => $registrar->id,
+            ],
         );
 
         $sheet = GradeSheet::updateOrCreate(
@@ -64,6 +72,7 @@ class DatabaseSeeder extends Seeder
                 'subject' => 'Mock Business Law',
                 'semester' => '1st Semester 2025-2026',
                 'students' => 1,
+                'units' => 3,
                 'submitted' => now()->toDateString(),
                 'status' => 'Published',
                 'reviewed_by' => null,

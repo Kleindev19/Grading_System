@@ -8,27 +8,32 @@ import { apiUrl, parseApiResponse } from './services/dataService'
 
 const devRole = ref<'student' | 'professor' | 'registrar' | null>(null)
 const devLoading = ref(false)
-const devUser = {
-  student: { name: 'Mock Student', role: 'student', username: '23-00001' },
-  professor: { name: 'Mock Professor', role: 'professor', username: 'mock.professor' },
-  registrar: { name: 'Mock Registrar', role: 'registrar', username: 'mock.registrar' },
+const devError = ref('')
+const devUser = ref<Record<string, unknown> | null>(null)
+const devCredentials = {
+  student: { username: '23-00001', password: 'Password123!' },
+  professor: { username: 'mock.professor', password: 'Password123!' },
+  registrar: { username: 'mock.registrar', password: 'Password123!' },
 }
 
 async function openDevDashboard(role: 'student' | 'professor' | 'registrar') {
   devLoading.value = true
+  devError.value = ''
   try {
     const response = await fetch(apiUrl('/login'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ username: devUser[role].username, password: 'Password123!' }),
+      body: JSON.stringify(devCredentials[role]),
     })
-    const payload = await parseApiResponse<{ token: string; user: typeof devUser[typeof role]; message?: string }>(response)
+    const payload = await parseApiResponse<{ token: string; user: Record<string, unknown>; message?: string }>(response)
     if (!response.ok) throw new Error(payload.message || 'Unable to open development dashboard.')
     localStorage.setItem('auth_token', payload.token)
+    devUser.value = payload.user
     devRole.value = role
   } catch (error) {
     localStorage.removeItem('auth_token')
-    devRole.value = role
+    devUser.value = null
+    devError.value = error instanceof Error ? error.message : 'Unable to open development dashboard.'
   } finally {
     devLoading.value = false
   }
@@ -36,18 +41,20 @@ async function openDevDashboard(role: 'student' | 'professor' | 'registrar') {
 
 function closeDevDashboard() {
   devRole.value = null
+  devUser.value = null
 }
 </script>
 
 <template>
-  <StudentDashboard v-if="devRole === 'student'" :user="devUser.student" @signout="closeDevDashboard" />
-  <ProfessorDashboard v-else-if="devRole === 'professor'" :user="devUser.professor" @signout="closeDevDashboard" />
-  <RegistarDashboard v-else-if="devRole === 'registrar'" :user="devUser.registrar" @signout="closeDevDashboard" />
+  <StudentDashboard v-if="devRole === 'student' && devUser" :user="devUser" @signout="closeDevDashboard" />
+  <ProfessorDashboard v-else-if="devRole === 'professor' && devUser" :user="devUser" @signout="closeDevDashboard" />
+  <RegistarDashboard v-else-if="devRole === 'registrar' && devUser" :user="devUser" @signout="closeDevDashboard" />
   <div v-else class="app-shell">
     <HelloWorld />
     <aside class="dev-access" aria-label="Demo role access">
       <strong>DEMO ACCESS</strong>
       <span>Open the system by role without manual login</span>
+      <span v-if="devError" class="dev-error" role="alert">{{ devError }}</span>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('student')">Student</button>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('professor')">Professor</button>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('registrar')">Registrar</button>

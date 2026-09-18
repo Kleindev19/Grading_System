@@ -20,8 +20,10 @@ export interface GradeSheet {
   subject: string
   section: string
   professor: string
+  professor_id?: number
   semester: string
   students: number
+  units?: number
   submitted: string
   status: 'Submitted' | 'Approved' | 'Published'
   student_records?: StudentRecord[]
@@ -47,7 +49,9 @@ export interface GradeSchedule {
   releasedDate?: string
   status: 'Scheduled' | 'Released'
   midtermOpens?: string
+  midtermDeadline?: string
   finalsOpens?: string
+  finalsDeadline?: string
 }
 
 export interface Student {
@@ -183,12 +187,114 @@ export async function releaseGradeSchedule(id: number): Promise<GradeSchedule> {
   return payload.schedule
 }
 
-export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens?: string; finalsOpens?: string }): Promise<GradeSchedule> {
+export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens?: string; midtermDeadline?: string; finalsOpens?: string; finalsDeadline?: string }): Promise<GradeSchedule> {
   const payload = await apiRequest<{ schedule: GradeSchedule }>('/grade-periods', {
     method: 'POST',
     body: JSON.stringify(period),
   })
   return payload.schedule
+}
+
+export async function updateGradePeriod(id: number, period: { schoolYear: string; semester: string; midtermOpens?: string; midtermDeadline?: string; finalsOpens?: string; finalsDeadline?: string }): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(period),
+  })
+  return payload.schedule
+}
+
+export async function deleteGradePeriod(id: number): Promise<void> {
+  await apiRequest<{ message: string }>(`/grade-periods/${id}`, { method: 'DELETE' })
+}
+
+export interface MessageRecord {
+  id: number
+  studentId: number
+  studentName?: string
+  studentNumber?: string
+  professorId: number
+  professorName?: string
+  senderId: number
+  body?: string
+  attachmentUrl?: string
+  gradeSheet?: { id: number; code: string; subject: string; section: string } | null
+  createdAt?: string
+  readAt?: string | null
+}
+
+export interface MessageThread {
+  key: string
+  studentId: number
+  studentName?: string
+  studentNumber?: string
+  gradeSheetId?: number
+  course: { name: string; section: string }
+  messages: MessageRecord[]
+  unreadCount: number
+}
+
+export async function getMessages(): Promise<MessageRecord[]> {
+  const payload = await apiRequest<{ messages: MessageRecord[] }>('/messages')
+  return payload.messages
+}
+
+export async function sendMessage(message: { professorId?: number; studentId?: number; gradeSheetId?: number; body?: string; attachment?: File }): Promise<MessageRecord> {
+  const body = new FormData()
+  if (message.professorId) body.append('professor_id', String(message.professorId))
+  if (message.studentId) body.append('student_id', String(message.studentId))
+  if (message.gradeSheetId) body.append('grade_sheet_id', String(message.gradeSheetId))
+  if (message.body) body.append('body', message.body)
+  if (message.attachment) body.append('attachment', message.attachment)
+  const response = await fetch(apiUrl('/messages'), { method: 'POST', headers: authHeaders(), body })
+  const payload = await parseApiResponse<{ message: MessageRecord; message_error?: string }>(response)
+  if (!response.ok) throw new Error(payload.message_error || 'Unable to send message.')
+  return payload.message
+}
+
+export async function deleteMessage(messageId: number): Promise<void> {
+  const response = await fetch(apiUrl(`/messages/${messageId}`), {
+    method: 'DELETE',
+    headers: authHeaders(),
+  })
+  const payload = await parseApiResponse<{ message?: string }>(response)
+  if (!response.ok) throw new Error(payload.message || 'Unable to unsend message.')
+}
+
+export function groupMessages(messages: MessageRecord[]): MessageThread[] {
+  const groups = new Map<string, MessageThread>()
+
+  messages.forEach(message => {
+    const key = `${message.studentId}:${message.professorId || 'general'}`
+    const existing = groups.get(key)
+
+    if (existing) {
+      existing.messages.push(message)
+      if (!existing.gradeSheetId && message.gradeSheet?.id) {
+        existing.gradeSheetId = message.gradeSheet.id
+      }
+      if (!existing.course.name || existing.course.name === 'General Message') {
+        existing.course = { name: message.gradeSheet?.subject || 'General Message', section: message.gradeSheet?.section || '' }
+      }
+      if (!message.readAt && message.senderId !== message.professorId) existing.unreadCount += 1
+      return
+    }
+
+    groups.set(key, {
+      key,
+      studentId: message.studentId,
+      studentName: message.studentName,
+      studentNumber: message.studentNumber,
+      gradeSheetId: message.gradeSheet?.id,
+      course: { name: message.gradeSheet?.subject || 'General Message', section: message.gradeSheet?.section || '' },
+      messages: [message],
+      unreadCount: !message.readAt && message.senderId !== message.professorId ? 1 : 0,
+    })
+  })
+
+  return [...groups.values()].map(thread => ({
+    ...thread,
+    messages: [...thread.messages].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || '')),
+  }))
 }
 
 export async function getStudents(): Promise<Student[]> {

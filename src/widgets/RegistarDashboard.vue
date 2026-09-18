@@ -73,7 +73,7 @@
               class="institute-card"
               :style="{ '--accent': institute.color }"
               type="button"
-              @click="selectInstitute(institute)"
+              @pointerup.stop="selectInstitute(institute)"
             >
               <div class="card-accent"></div>
               <div class="card-white"></div>
@@ -202,36 +202,6 @@
             </section>
           </div>
 
-          <section v-if="activeTab === 'approval'" class="registrar-students-box">
-            <div class="registrar-students-heading">
-              <div>
-                <h3>Student List</h3>
-                <p>Add the students who will be used in grade sheets.</p>
-              </div>
-            </div>
-            <div class="student-list-table">
-              <div class="student-list-header">
-                <strong>STUDENT ID</strong>
-                <strong>STUDENT NAME</strong>
-                <strong>INSTITUTE</strong>
-                <span>ACTION</span>
-              </div>
-              <form class="student-add-row" @submit.prevent="saveStudent">
-                <input v-model.trim="studentForm.student_id" placeholder="Enter student ID" required />
-                <input v-model.trim="studentForm.name" placeholder="Enter student name" required />
-                <input v-model.trim="studentForm.institute" placeholder="Enter student institute" required />
-                <button type="submit">+ Add Student</button>
-              </form>
-              <div v-for="student in students" :key="student.id" class="student-list-row">
-                <strong>{{ student.student_id }}</strong>
-                <span>{{ student.name }}</span>
-                <span>{{ student.institute || '-' }}</span>
-                <span class="student-added-label">Added</span>
-              </div>
-              <p v-if="students.length === 0" class="student-list-empty">No students added yet.</p>
-            </div>
-          </section>
-
           <div v-else-if="activeTab === 'release'" class="release-panel">
             <h3>Grade Release Settings</h3>
             <div class="release-content">
@@ -298,21 +268,24 @@
             <h3 class="period-title">Grade Period Setting</h3>
             <div class="period-content">
               <form class="period-form" @submit.prevent="saveGradePeriod">
-                <p class="period-form-title">&#128197; Schedule New Grade Period</p>
+                <p class="period-form-title">&#128197; Set Grade Period</p>
                 <div class="period-fields">
                   <label>School Year<input v-model="periodForm.schoolYear" type="text" /></label>
                   <label>Semester<select v-model="periodForm.semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select></label>
-                  <label>Midterm Opens On<input v-model="periodForm.midtermOpens" type="date" /></label>
-                  <label>Finals Opens On<input v-model="periodForm.finalsOpens" type="date" /></label>
-                  <button class="save-period-button" type="submit">&#128190; Save Sched</button>
+                  <label>Midterm Open<input v-model="periodForm.midtermOpens" type="date" required /></label>
+                  <label>Midterm Deadline<input v-model="periodForm.midtermDeadline" type="date" required /></label>
+                  <label>Finals Open<input v-model="periodForm.finalsOpens" type="date" required /></label>
+                  <label>Finals Deadline<input v-model="periodForm.finalsDeadline" type="date" required /></label>
+                  <button class="save-period-button" type="submit">&#128190; {{ editingPeriodId ? 'Update Grade Period' : 'Save Grade Period' }}</button>
                 </div>
               </form>
               <section class="active-schedules">
                 <h4>Active Schedules</h4>
                 <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
-                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm: {{ period.midtermOpens || '-' }} &nbsp;|&nbsp; Finals: {{ period.finalsOpens || '-' }}</small></div>
-                  <span class="period-state">Midterm Open</span>
-                  <span class="period-state locked">Finals Locked</span>
+                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm: {{ period.midtermOpens || '-' }} to {{ period.midtermDeadline || '-' }} &nbsp;|&nbsp; Finals: {{ period.finalsOpens || '-' }} to {{ period.finalsDeadline || '-' }}</small></div>
+                  <span class="period-state" :class="{ locked: periodState(period, 'midterm') === 'Closed' }">Midterm {{ periodState(period, 'midterm') }}</span>
+                  <span class="period-state" :class="{ locked: periodState(period, 'finals') === 'Closed' }">Finals {{ periodState(period, 'finals') }}</span>
+                  <div class="period-actions"><button type="button" class="edit-period-button" @click="editGradePeriod(period)">Edit</button><button type="button" class="remove-period-button" @click="removeGradePeriod(period)">Remove</button></div>
                 </div>
                 <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
               </section>
@@ -329,7 +302,6 @@
               <h3>Student Repository</h3>
               <p>View students and their published grades.</p>
             </div>
-            <button class="add-student-button" type="button" @click="showStudentForm = true">&#43; Add Student</button>
           </div>
           <div class="repository-layout">
             <aside class="repository-sidebar">
@@ -372,9 +344,9 @@
           <div class="professor-heading">
             <div>
               <h2>PROFESSOR REPOSITORY</h2>
-              <h3>{{ selectedInstitute?.name || 'INSTITUTE OF BUSINESS AND ENTREPRENEURSHIP' }}</h3>
+              <h3>{{ selectedInstitute?.name || 'Select an institute first' }}</h3>
             </div>
-            <button class="add-professor-button" type="button" @click="showAddProfessorNotice = true">&#43; Add Prof</button>
+
           </div>
           <div class="professor-toolbar">
             <input v-model="professorSearch" placeholder="Search professor name ......" />
@@ -384,7 +356,7 @@
               <thead><tr><th>Name</th><th>Email</th><th>Institute</th><th>Department</th><th>Status</th></tr></thead>
               <tbody>
                 <tr v-for="professor in filteredProfessors" :key="professor.id">
-                  <td>{{ professor.name }}</td><td>{{ professor.email }}</td><td>IBE</td><td><span>BSBA HRM</span><span>BSE</span></td><td><b>{{ professor.status }}</b></td>
+                  <td>{{ professor.name }}</td><td>{{ professor.email }}</td><td>{{ selectedInstitute?.short || '-' }}</td><td><span>{{ professorCourse(professor) }}</span></td><td><b>{{ professor.status === 'Pending' ? 'Active' : professor.status }}</b></td>
                 </tr>
                 <tr v-if="filteredProfessors.length === 0"><td colspan="5" class="empty-cell">No registered professors found.</td></tr>
               </tbody>
@@ -394,25 +366,9 @@
       </section>
     </main>
 
-    <div v-if="showStudentForm" class="student-form-backdrop" @click.self="showStudentForm = false">
-      <form class="student-form-modal" @submit.prevent="saveStudent">
-        <div class="student-form-heading"><h2>&#43; Add New Student</h2><button type="button" aria-label="Close" @click="showStudentForm = false">&#10005;</button></div>
-        <label>Student Number<input v-model.trim="studentForm.student_id" required /></label>
-        <label>Student Name<input v-model.trim="studentForm.name" required /></label>
-        <label>Institute<input v-model.trim="studentForm.institute" /></label>
-        <label>Course<input v-model.trim="studentForm.course" /></label>
-        <label>Year Level<select v-model="studentForm.year_level"><option value="">Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select></label>
-        <label>Section<select v-model="studentForm.section"><option value="">Section</option><option v-for="section in repositorySections" :key="section" :value="section">{{ section }}</option></select></label>
-        <label>Status<select v-model="studentForm.status"><option>Active</option><option>Inactive</option></select></label>
-        <button class="student-form-submit" type="submit">&#43; Add</button>
-      </form>
-    </div>
-
     <div v-if="showAddProfessorNotice" class="student-form-backdrop" @click.self="showAddProfessorNotice = false">
       <section class="student-form-modal professor-notice" role="dialog" aria-modal="true">
-        <div class="student-form-heading"><h2>Add Professor</h2><button type="button" aria-label="Close" @click="showAddProfessorNotice = false">&#10005;</button></div>
-        <p>Professor accounts are created through the Registration form. After registration and email verification, the account will appear here automatically.</p>
-        <button class="student-form-submit" type="button" @click="showAddProfessorNotice = false">Close</button>
+
       </section>
     </div>
 
@@ -434,7 +390,7 @@
               <p>{{ reviewSheet.section }} &bull; {{ reviewSheet.semester }}</p>
               <p>Professor: {{ reviewSheet.professor }}</p>
             </div>
-            <span class="review-status">{{ reviewSheet.status }}</span>
+            <span class="review-status" :class="{ published: reviewSheet.status === 'Published' }">{{ reviewSheet.status }}</span>
           </div>
 
           <div class="review-summary">
@@ -508,7 +464,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { addStudent, createGradePeriod, createGradeSchedule, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, updateGradeSheetStatus } from '../services/dataService'
+import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 
 const props = defineProps({ user: { type: Object, default: null } })
@@ -524,8 +480,6 @@ const currentTime = ref(Date.now())
 const calendarOpen = ref(false)
 const showAddProfessorNotice = ref(false)
 const expandedYears = ref(['1st Year'])
-const publishedCount = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Published').length)
-const approvedGradeSheets = computed(() => gradeSheets.value.filter(sheet => sheet.status === 'Approved' && sheet.id))
 const scheduleDrafts = reactive({})
 const releaseForm = ref({
   schoolYear: '2025-2026',
@@ -538,8 +492,11 @@ const periodForm = ref({
   schoolYear: '2025-2026',
   semester: 'Semester',
   midtermOpens: '',
+  midtermDeadline: '',
   finalsOpens: '',
+  finalsDeadline: '',
 })
+const editingPeriodId = ref(null)
 const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
 const institutes = getInstitutes()
 
@@ -547,22 +504,28 @@ function instituteMatches(value, institute) {
   const text = `${value?.code || ''} ${value?.subject || ''} ${value?.name || ''} ${value?.section || ''}`.toLowerCase()
   const isComputing = /\bbsit\b|\bitfund\b|\bit\d+\b|comput/.test(text)
   const isEducation = /\bbeed\b|\bbed\b|education|edu\d+|teacher/.test(text)
-  const isBusiness = /\bbsba\b|business|buslaw|finacc|entrepreneur|mock101/.test(text)
+  const isBusiness = /\bbsba\b|business|buslaw|finacc|entrepreneur/.test(text)
   if (institute.id === 'ics') return isComputing && !isEducation
-  if (institute.id === 'ite') return isEducation && !isComputing
+  if (institute.id === 'ioe') return isEducation && !isComputing
   if (institute.id === 'ibe') return isBusiness && !isComputing && !isEducation
   return false
 }
 
 const gradeSheets = ref([])
 const schedules = ref([])
+const instituteGradeSheets = computed(() => gradeSheets.value.filter(sheet => !selectedInstitute.value || instituteMatches(sheet, selectedInstitute.value)))
+const publishedCount = computed(() => instituteGradeSheets.value.filter(sheet => sheet.status === 'Published').length)
+const approvedGradeSheets = computed(() => instituteGradeSheets.value.filter(sheet => sheet.status === 'Approved' && sheet.id))
 const reviewStudents = computed(() => reviewSheet.value?.student_records || [])
 const students = ref([])
 const professors = ref([])
 const professorSearch = ref('')
 const filteredProfessors = computed(() => {
   const query = professorSearch.value.trim().toLowerCase()
-  return professors.value.filter(professor => !query || `${professor.name} ${professor.email}`.toLowerCase().includes(query))
+  return professors.value.filter(professor => {
+    const matchesInstitute = !selectedInstitute.value || gradeSheets.value.some(sheet => sheet.professor === professor.name && instituteMatches(sheet, selectedInstitute.value))
+    return matchesInstitute && (!query || `${professor.name} ${professor.email}`.toLowerCase().includes(query))
+  })
 })
 const repositorySearch = ref('')
 const repositoryInstitute = ref('')
@@ -571,8 +534,6 @@ const repositoryYear = ref('')
 const repositorySection = ref('')
 const repositoryLetter = ref('')
 const selectedRepositoryStudentId = ref('')
-const showStudentForm = ref(false)
-const studentForm = ref({ student_id: '', name: '', institute: '', course: '', year_level: '', section: '', status: 'Active' })
 const repositoryYears = ['1st Year', '2nd Year', '3rd Year', '4th Year']
 const repositorySections = ['A', 'B', 'C', 'D']
 const lastNameGroups = ['A - E', 'F - J', 'K - O', 'P - T', 'U - Z']
@@ -609,6 +570,18 @@ function isReleaseAvailable(schedule) {
 }
 
 let releaseClock
+let dataRefreshTimer
+
+async function refreshRegistrarData() {
+  const [gradeSheetsResult, schedulesResult] = await Promise.allSettled([getGradeSheets(), getGradeSchedules()])
+  if (gradeSheetsResult.status === 'fulfilled') {
+    gradeSheets.value = gradeSheetsResult.value
+    if (reviewSheet.value?.id) {
+      reviewSheet.value = gradeSheetsResult.value.find(sheet => sheet.id === reviewSheet.value.id) || reviewSheet.value
+    }
+  }
+  if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
+}
 
 onMounted(async () => {
   releaseClock = window.setInterval(() => { currentTime.value = Date.now() }, 30000)
@@ -617,9 +590,13 @@ onMounted(async () => {
   if (studentsResult.status === 'fulfilled') students.value = studentsResult.value
   if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
   if (professorsResult.status === 'fulfilled') professors.value = professorsResult.value
+  dataRefreshTimer = window.setInterval(() => { void refreshRegistrarData() }, 5000)
 })
 
-onUnmounted(() => window.clearInterval(releaseClock))
+onUnmounted(() => {
+  window.clearInterval(releaseClock)
+  window.clearInterval(dataRefreshTimer)
+})
 
 const calendarDays = computed(() => {
   const today = new Date()
@@ -634,8 +611,8 @@ const calendarDays = computed(() => {
 })
 
 const summaryCards = computed(() => {
-  const pending = gradeSheets.value.filter(s => s.status === 'Submitted').length
-  const approved = gradeSheets.value.filter(s => s.status === 'Approved').length
+  const pending = instituteGradeSheets.value.filter(s => s.status === 'Submitted').length
+  const approved = instituteGradeSheets.value.filter(s => s.status === 'Approved').length
   return [
     {
       label: 'Pending Review',
@@ -654,8 +631,7 @@ const summaryCards = computed(() => {
 
 const filteredSheets = computed(() => {
   const query = search.value.trim().toLowerCase()
-  return gradeSheets.value.filter((sheet) => {
-    const matchesInstitute = !selectedInstitute.value || instituteMatches(sheet, selectedInstitute.value)
+  return instituteGradeSheets.value.filter((sheet) => {
     const matchesStatus = statusFilter.value === 'All Status' || sheet.status === statusFilter.value
     const matchesSearch =
       !query ||
@@ -664,7 +640,7 @@ const filteredSheets = computed(() => {
       sheet.professor.toLowerCase().includes(query) ||
       sheet.section.toLowerCase().includes(query)
 
-    return matchesInstitute && matchesStatus && matchesSearch
+    return matchesStatus && matchesSearch
   })
 })
 
@@ -710,6 +686,7 @@ function toggleReleaseYear(label) {
 
 function selectInstitute(institute) {
   selectedInstitute.value = institute
+  repositoryInstitute.value = institute.short
   currentView.value = 'management'
   activeTab.value = 'approval'
 }
@@ -720,12 +697,19 @@ function backToInstitutes() {
 }
 
 function openRepository() {
+  if (selectedInstitute.value) repositoryInstitute.value = selectedInstitute.value.short
   currentView.value = 'students'
 }
 
 function openProfessorRepository() {
   if (!selectedInstitute.value) selectedInstitute.value = institutes[0]
+  repositoryInstitute.value = selectedInstitute.value.short
   currentView.value = 'professors'
+}
+
+function professorCourse(professor) {
+  const sheet = gradeSheets.value.find(item => item.professor === professor.name && (!selectedInstitute.value || instituteMatches(item, selectedInstitute.value)))
+  return sheet?.code || 'No course yet'
 }
 
 function repositoryGrades(studentId) {
@@ -821,22 +805,59 @@ function releaseNow(schedule) {
   }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to release schedule.'))
 }
 
-function saveGradePeriod() {
+function resolveDeadline(dateValue) {
+  if (!dateValue) return null
+  const date = new Date(`${dateValue}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+function periodState(period, type) {
+  const today = new Date(currentTime.value)
+  today.setHours(0, 0, 0, 0)
+  const opens = resolveDeadline(type === 'midterm' ? period.midtermOpens : period.finalsOpens)
+  const deadline = resolveDeadline(type === 'midterm' ? period.midtermDeadline : period.finalsDeadline)
+  if (!opens || !deadline) return 'Not set'
+  if (today.getTime() < opens.getTime()) return 'Upcoming'
+
+  return today.getTime() < deadline.getTime() ? 'Open' : 'Closed'
+}
+
+function editGradePeriod(period) {
+  editingPeriodId.value = period.id
+  periodForm.value = {
+    schoolYear: period.schoolYear,
+    semester: period.semester,
+    midtermOpens: period.midtermOpens || '',
+    midtermDeadline: period.midtermDeadline || '',
+    finalsOpens: period.finalsOpens || '',
+    finalsDeadline: period.finalsDeadline || '',
+  }
+}
+
+async function removeGradePeriod(period) {
+  if (!period.id || !window.confirm(`Remove the grade period for ${period.schoolYear} - ${period.semester}?`)) return
+  try {
+    await deleteGradePeriod(period.id)
+    schedules.value = schedules.value.filter(schedule => schedule.id !== period.id)
+    if (editingPeriodId.value === period.id) editingPeriodId.value = null
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Unable to remove grade period.')
+  }
+}
+
+async function saveGradePeriod() {
   if (periodForm.value.semester === 'Semester') return
-  createGradePeriod(periodForm.value).then(schedule => {
-    schedules.value.unshift(schedule)
+  const request = editingPeriodId.value
+    ? updateGradePeriod(editingPeriodId.value, periodForm.value)
+    : createGradePeriod(periodForm.value)
+  request.then(schedule => {
+    const index = schedules.value.findIndex(item => item.id === schedule.id)
+    if (index !== -1) schedules.value[index] = schedule
+    else schedules.value.unshift(schedule)
+    editingPeriodId.value = null
   }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to save grade period.'))
 }
 
-async function saveStudent() {
-  try {
-    students.value.unshift(await addStudent(studentForm.value))
-    studentForm.value = { student_id: '', name: '', institute: '', course: '', year_level: '', section: '', status: 'Active' }
-    showStudentForm.value = false
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : 'Unable to add student.')
-  }
-}
 </script>
 
 <style scoped>
@@ -1016,6 +1037,7 @@ async function saveStudent() {
   position: absolute;
   inset: 0;
   opacity: 0.44;
+  pointer-events: none;
   background:
     linear-gradient(90deg, transparent 0 7%, rgba(255, 255, 255, 0.55) 7% 8%, transparent 8% 15%, rgba(255, 255, 255, 0.55) 15% 16%, transparent 16% 100%),
     repeating-linear-gradient(0deg, transparent 0 84px, rgba(255, 255, 255, 0.8) 84px 91px, transparent 91px 156px),
@@ -1045,6 +1067,8 @@ async function saveStudent() {
 }
 
 .institute-grid {
+  position: relative;
+  z-index: 2;
   width: 100%;
   max-width: 997px;
   display: grid;
@@ -1054,6 +1078,8 @@ async function saveStudent() {
 
 .institute-card {
   position: relative;
+  z-index: 2;
+  pointer-events: auto;
   height: 196px;
   overflow: hidden;
   border: 1px solid rgba(24, 24, 24, 0.35);
@@ -1068,6 +1094,7 @@ async function saveStudent() {
   inset: 0 0 auto;
   height: 88px;
   background: var(--accent);
+  pointer-events: none;
 }
 
 .card-white {
@@ -1078,6 +1105,7 @@ async function saveStudent() {
   height: 105px;
   border-radius: 50% 50% 0 0 / 40% 40% 0 0;
   background: rgba(249, 249, 249, 0.92);
+  pointer-events: none;
 }
 
 .institute-seal {
@@ -1085,6 +1113,7 @@ async function saveStudent() {
   inset: 0;
   display: grid;
   place-items: center;
+  pointer-events: none;
 }
 
 .institute-seal img {
@@ -2166,7 +2195,7 @@ async function saveStudent() {
 
 .period-fields {
   display: grid;
-  grid-template-columns: 1fr 1fr 1.25fr 1.25fr auto;
+  grid-template-columns: repeat(6, minmax(110px, 1fr)) auto;
   gap: 14px;
   align-items: end;
 }
@@ -2204,7 +2233,7 @@ async function saveStudent() {
 
 .active-schedule-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto auto auto;
   align-items: center;
   gap: 14px;
   padding: 10px 14px;
@@ -2235,6 +2264,29 @@ async function saveStudent() {
 .period-state.locked {
   background: #dddddd;
   color: #111111;
+}
+
+.period-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.period-actions button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 5px;
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.edit-period-button {
+  background: #2d7b4a;
+}
+
+.remove-period-button {
+  background: #c94b4b;
 }
 
 .repository-panel {
@@ -2352,13 +2404,19 @@ async function saveStudent() {
 .review-status {
   display: inline-flex;
   align-items: center;
-  min-height: 26px;
+  min-height: 36px;
   padding: 3px 12px;
-  border-radius: 999px;
-  background: #d9d9d9;
-  color: #000000;
+  justify-content: center;
+  border: 1px solid #90d6a7;
+  border-radius: 12px;
+  background: #a9f3bf;
+  color: #173f2c;
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 800;
+}
+
+.review-status.published {
+  min-width: 92px;
 }
 
 .review-button {

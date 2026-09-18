@@ -5,6 +5,7 @@ use App\Http\Controllers\GradeSheetController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\GradeScheduleController;
 use App\Http\Controllers\ProfessorController;
+use App\Http\Controllers\MessageController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -20,9 +21,14 @@ Route::middleware('auth.token')->group(function () {
     Route::get('/published-grades', [GradeSheetController::class, 'published']);
     Route::get('/students', [StudentController::class, 'index']);
     Route::get('/professors', [ProfessorController::class, 'index']);
+    Route::get('/messages', [MessageController::class, 'index']);
+    Route::post('/messages', [MessageController::class, 'store']);
+    Route::delete('/messages/{message}', [MessageController::class, 'destroy']);
     Route::post('/students', [StudentController::class, 'store']);
     Route::get('/grade-schedules', [GradeScheduleController::class, 'index']);
     Route::post('/grade-schedules', [GradeScheduleController::class, 'store']);
     Route::patch('/grade-schedules/{schedule}/release', [GradeScheduleController::class, 'release']);
     Route::post('/grade-periods', [GradeScheduleController::class, 'storePeriod']);
+    Route::patch('/grade-periods/{schedule}', [GradeScheduleController::class, 'updatePeriod']);
+    Route::delete('/grade-periods/{schedule}', [GradeScheduleController::class, 'destroyPeriod']);
 });

@@ -9,7 +9,7 @@ class GradeSchedule extends Model
 {
     protected $fillable = [
         'school_year', 'semester', 'year_level', 'courses', 'released_date',
-        'status', 'midterm_opens', 'finals_opens', 'created_by',
+        'status', 'midterm_opens', 'midterm_deadline', 'finals_opens', 'finals_deadline', 'created_by',
     ];
 
     protected function casts(): array
@@ -18,7 +18,9 @@ class GradeSchedule extends Model
             'courses' => 'array',
             'released_date' => 'date',
             'midterm_opens' => 'date',
+            'midterm_deadline' => 'date',
             'finals_opens' => 'date',
+            'finals_deadline' => 'date',
         ];
     }
 

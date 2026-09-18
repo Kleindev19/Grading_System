@@ -53,6 +53,7 @@ class AuthController extends Controller
                     'course' => $data['course'],
                     'year_level' => $data['year_level'],
                     'section' => strtoupper($data['section']),
+                    'status' => 'Active',
                     'created_by' => $user->id,
                 ],
             );

@@ -57,23 +57,34 @@ class GradeScheduleController extends Controller
             ->values();
 
         if ($sheetIds->isNotEmpty()) {
-            GradeSheet::query()
+            $this->completeApprovedSheets(GradeSheet::query())
                 ->whereIn('id', $sheetIds)
-                ->where('status', 'Approved')
                 ->update(['status' => 'Published']);
         } else {
             $semester = str_ireplace('semester', 'sem', $schedule->semester);
 
-            GradeSheet::query()
+            $this->completeApprovedSheets(GradeSheet::query())
                 ->where(function ($query) use ($schedule, $semester) {
                     $query->where('semester', $schedule->semester)
                         ->orWhere('semester', 'like', $semester . '%');
                 })
-                ->where('status', 'Approved')
                 ->update(['status' => 'Published']);
         }
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
+    }
+
+    private function completeApprovedSheets($query)
+    {
+        return $query
+            ->where('status', 'Approved')
+            ->whereHas('studentsList')
+            ->whereDoesntHave('studentsList', function ($studentQuery): void {
+                $studentQuery->whereNull('midterm')->orWhere('midterm', '')
+                    ->orWhereNull('finals')->orWhere('finals', '')
+                    ->orWhereNull('final_grade')->orWhere('final_grade', '')
+                    ->orWhereNull('grade_point')->orWhere('grade_point', '');
+            });
     }
 
     public function storePeriod(Request $request): JsonResponse
@@ -85,7 +96,9 @@ class GradeScheduleController extends Controller
             'schoolYear' => ['required', 'string', 'max:20'],
             'semester' => ['required', 'string', 'max:40'],
             'midtermOpens' => ['nullable', 'date'],
+            'midtermDeadline' => ['nullable', 'date', 'after_or_equal:midtermOpens'],
             'finalsOpens' => ['nullable', 'date'],
+            'finalsDeadline' => ['nullable', 'date', 'after_or_equal:finalsOpens'],
         ]);
 
         $schedule = GradeSchedule::create([
@@ -94,12 +107,50 @@ class GradeScheduleController extends Controller
             'year_level' => 'Grade Period',
             'courses' => [],
             'midterm_opens' => $data['midtermOpens'] ?? null,
+            'midterm_deadline' => $data['midtermDeadline'] ?? null,
             'finals_opens' => $data['finalsOpens'] ?? null,
+            'finals_deadline' => $data['finalsDeadline'] ?? null,
             'status' => 'Released',
             'created_by' => $user->id,
         ]);
 
         return response()->json(['schedule' => $this->serialize($schedule)], 201);
+    }
+
+    public function updatePeriod(Request $request, GradeSchedule $schedule): JsonResponse
+    {
+        $user = $request->attributes->get('auth_user');
+        abort_unless($user->role === 'registrar', 403, 'Only registrars can update grade periods.');
+        abort_unless($schedule->year_level === 'Grade Period', 404);
+
+        $data = $request->validate([
+            'schoolYear' => ['required', 'string', 'max:20'],
+            'semester' => ['required', 'string', 'max:40'],
+            'midtermOpens' => ['nullable', 'date'],
+            'midtermDeadline' => ['nullable', 'date', 'after_or_equal:midtermOpens'],
+            'finalsOpens' => ['nullable', 'date'],
+            'finalsDeadline' => ['nullable', 'date', 'after_or_equal:finalsOpens'],
+        ]);
+
+        $schedule->update([
+            'school_year' => $data['schoolYear'],
+            'semester' => $data['semester'],
+            'midterm_opens' => $data['midtermOpens'] ?? null,
+            'midterm_deadline' => $data['midtermDeadline'] ?? null,
+            'finals_opens' => $data['finalsOpens'] ?? null,
+            'finals_deadline' => $data['finalsDeadline'] ?? null,
+        ]);
+
+        return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
+    }
+
+    public function destroyPeriod(Request $request, GradeSchedule $schedule): JsonResponse
+    {
+        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can delete grade periods.');
+        abort_unless($schedule->year_level === 'Grade Period', 404);
+        $schedule->delete();
+
+        return response()->json(['message' => 'Grade period removed.']);
     }
 
     private function serialize(GradeSchedule $schedule): array
@@ -113,7 +164,9 @@ class GradeScheduleController extends Controller
             'releasedDate' => $schedule->released_date?->toDateString(),
             'status' => $schedule->status,
             'midtermOpens' => $schedule->midterm_opens?->toDateString(),
+            'midtermDeadline' => $schedule->midterm_deadline?->toDateString(),
             'finalsOpens' => $schedule->finals_opens?->toDateString(),
+            'finalsDeadline' => $schedule->finals_deadline?->toDateString(),
         ];
     }
 }

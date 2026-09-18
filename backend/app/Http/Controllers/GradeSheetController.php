@@ -12,6 +12,7 @@ class GradeSheetController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->attributes->get('auth_user');
+        $this->returnIncompleteSheetsToProfessor();
 
         if ($user->role === 'registrar') {
             return response()->json(['grade_sheets' => GradeSheet::with('professor:id,name')->latest()->get()->map(fn (GradeSheet $sheet) => $this->serialize($sheet))]);
@@ -34,14 +35,15 @@ class GradeSheetController extends Controller
             'subject' => ['required', 'string', 'max:255'],
             'section' => ['required', 'string', 'max:80'],
             'semester' => ['required', 'string', 'max:80'],
-            'students' => ['required', 'integer', 'min:0'],
-            'student_records' => ['sometimes', 'array'],
+            'students' => ['required', 'integer', 'min:1'],
+            'units' => ['required', 'integer', 'min:1'],
+            'student_records' => ['required', 'array', 'min:1'],
             'student_records.*.id' => ['required', 'string', 'max:80'],
             'student_records.*.name' => ['required', 'string', 'max:255'],
-            'student_records.*.midterm' => ['nullable', 'string', 'max:40'],
-            'student_records.*.finals' => ['nullable', 'string', 'max:40'],
-            'student_records.*.finalGrade' => ['nullable', 'string', 'max:40'],
-            'student_records.*.gradePoint' => ['nullable', 'string', 'max:40'],
+            'student_records.*.midterm' => ['required', 'string', 'max:40'],
+            'student_records.*.finals' => ['required', 'string', 'max:40'],
+            'student_records.*.finalGrade' => ['required', 'string', 'max:40'],
+            'student_records.*.gradePoint' => ['required', 'string', 'max:40'],
             'student_records.*.remarks' => ['nullable', 'string', 'max:255'],
             'student_records.*.scores' => ['sometimes', 'array'],
         ]);
@@ -76,6 +78,20 @@ class GradeSheetController extends Controller
             'rejection_reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
+        if ($data['status'] === 'Published') {
+            $gradeSheet->load('studentsList');
+            $hasIncompleteGrades = $gradeSheet->studentsList->isEmpty() || $gradeSheet->studentsList->contains(function ($student): bool {
+                return blank($student->midterm)
+                    || blank($student->finals)
+                    || blank($student->final_grade)
+                    || blank($student->grade_point);
+            });
+
+            if ($hasIncompleteGrades) {
+                return response()->json(['message' => 'Cannot publish grades while any student grade is incomplete.'], 422);
+            }
+        }
+
         $gradeSheet->forceFill([
             'status' => $data['status'],
             'reviewed_by' => $user->id,
@@ -95,11 +111,13 @@ class GradeSheetController extends Controller
         $user = $request->attributes->get('auth_user');
         abort_unless($user->role === 'student', 403, 'Only students can view published grades.');
 
+        $this->returnIncompleteSheetsToProfessor();
+
         $studentId = $user->student_id ?: $user->username;
 
         return response()->json([
             'grade_sheets' => GradeSheet::with('professor:id,name', 'studentsList')
-                ->whereIn('status', ['Published', 'Released'])
+                ->where('status', 'Published')
                 ->whereHas('studentsList', function ($query) use ($studentId, $user) {
                     $query->where('student_id', $studentId)
                         ->orWhere('student_id', $user->username);
@@ -108,6 +126,30 @@ class GradeSheetController extends Controller
                 ->get()
                 ->map(fn (GradeSheet $sheet) => $this->serialize($sheet, $studentId))
         ]);
+    }
+
+    private function returnIncompleteSheetsToProfessor(): void
+    {
+        GradeSheet::with('studentsList')
+            ->whereIn('status', ['Published', 'Released'])
+            ->get()
+            ->each(function (GradeSheet $sheet): void {
+                $hasIncompleteGrades = $sheet->studentsList->isEmpty() || $sheet->studentsList->contains(function ($student): bool {
+                    return blank($student->midterm)
+                        || blank($student->finals)
+                        || blank($student->final_grade)
+                        || blank($student->grade_point);
+                });
+
+                if ($hasIncompleteGrades) {
+                    $sheet->forceFill([
+                        'status' => 'Submitted',
+                        'reviewed_by' => null,
+                        'reviewed_at' => null,
+                        'rejection_reason' => 'Returned to professor: incomplete grades.',
+                    ])->save();
+                }
+            });
     }
 
 
@@ -125,6 +167,7 @@ class GradeSheetController extends Controller
             'section' => $sheet->section,
             'semester' => $sheet->semester,
             'students' => $sheet->students,
+            'units' => $sheet->units,
             'submitted' => $sheet->submitted?->toDateString(),
             'status' => $sheet->status,
             'professor' => $sheet->professor?->name ?? '',

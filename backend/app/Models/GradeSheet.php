@@ -14,6 +14,7 @@ class GradeSheet extends Model
         'section',
         'semester',
         'students',
+        'units',
         'submitted',
         'status',
         'professor_id',

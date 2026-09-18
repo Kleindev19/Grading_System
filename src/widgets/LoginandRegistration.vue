@@ -130,6 +130,7 @@ import StudentDashboard from './StudentDashboard.vue'
 import ProfessorDashboard from './ProfessorDashboard.vue'
 import RegistarDashboard from './RegistarDashboard.vue'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
+import { jsx } from 'vue/jsx-runtime'
 
 const mode = ref('login')
 const loading = ref(false)
