@@ -2068,7 +2068,10 @@ async function saveGradePeriod() {
 }
 
 .pending-schedule-card .add-release-button {
+  position: static;
   grid-column: 1 / -1;
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   min-height: 36px;
 }

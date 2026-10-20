@@ -94,6 +94,44 @@ class DatabaseSeeder extends Seeder
             ],
         );
 
+        $workflowSheets = [];
+        foreach ([
+            'MOCK-APPROVAL' => ['Submitted', '88'],
+            'MOCK-INCOMPLETE' => ['Submitted', ''],
+            'MOCK-READY' => ['Approved', '86'],
+            'MOCK-SCHEDULED' => ['Approved', '90'],
+        ] as $code => [$status, $midterm]) {
+            $workflowSheet = GradeSheet::updateOrCreate(
+                ['code' => $code, 'section' => 'BSBA - 1A', 'professor_id' => $professor->id],
+                [
+                    'subject' => 'Mock Business Law - ' . str_replace('MOCK-', '', $code),
+                    'semester' => '1st Semester 2026-2027',
+                    'students' => 1,
+                    'units' => 3,
+                    'submitted' => now()->toDateString(),
+                    'status' => $status,
+                    'reviewed_by' => $status === 'Approved' ? $registrar->id : null,
+                    'reviewed_at' => $status === 'Approved' ? now() : null,
+                    'rejection_reason' => null,
+                ],
+            );
+
+            $workflowSheet->studentsList()->updateOrCreate(
+                ['student_id' => '23-00001'],
+                [
+                    'name' => $studentUser->name,
+                    'midterm' => $midterm,
+                    'finals' => '91',
+                    'final_grade' => '90',
+                    'grade_point' => '1.50',
+                    'remarks' => 'Passed',
+                    'assessment_scores' => ['Q1' => '18', 'Q2' => '19', 'A1' => '45'],
+                ],
+            );
+
+            $workflowSheets[$code] = $workflowSheet;
+        }
+
         GradeSchedule::updateOrCreate(
             ['school_year' => '2025-2026', 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
             [
@@ -102,6 +140,19 @@ class DatabaseSeeder extends Seeder
                 'status' => 'Scheduled',
                 'midterm_opens' => now()->toDateString(),
                 'finals_opens' => now()->toDateString(),
+            ],
+        );
+
+        GradeSchedule::updateOrCreate(
+            ['school_year' => '2026-2027', 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
+            [
+                'courses' => ['sheet:' . $workflowSheets['MOCK-SCHEDULED']->id],
+                'released_date' => now()->addDay()->toDateString(),
+                'status' => 'Scheduled',
+                'midterm_opens' => null,
+                'midterm_deadline' => null,
+                'finals_opens' => null,
+                'finals_deadline' => null,
             ],
         );
 
