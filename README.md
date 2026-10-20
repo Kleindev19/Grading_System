@@ -57,4 +57,8 @@ php artisan test
 
 The frontend uses the Vite `/api` proxy locally. For a deployed frontend, set `VITE_API_URL` to the public Laravel backend URL using the root `.env.example` as a reference.
 
+## Mother System Integration
+
+The app is prepared to connect through a Mother System adapter, but it does not currently call or sync with the Mother System directly. The adapter must expose the canonical API contract documented in [`docs/mother-system-integration.md`](docs/mother-system-integration.md). Configure `VITE_API_URL` to the adapter/backend origin or to its `/api` base URL. Keep the Mother System's field names and authentication behind that adapter so the role dashboards and grading workflows continue to use the app's stable contract.
+
 Do not commit `.env`, database credentials, mail credentials, or uploaded storage files.

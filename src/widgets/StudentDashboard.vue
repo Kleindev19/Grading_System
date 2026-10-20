@@ -124,10 +124,12 @@
           <div class="panel-head">
             <h2>PUBLISHED GRADES</h2>
             <select v-model="semester" aria-label="Semester">
-              <option>1st Semester 2025-2026</option>
-              <option>2nd Semester 2025-2026</option>
+              <option v-for="period in semesterOptions" :key="period" :value="period" :disabled="isSemesterOptionLocked(period)">
+                {{ period }}{{ isSemesterOptionLocked(period) ? ' (LOCKED)' : '' }}
+              </option>
             </select>
           </div>
+          <p v-if="semesterLockMessage" class="semester-lock-notice" role="status"><strong>LOCKED</strong> {{ semesterLockMessage }}</p>
 
           <div class="table-responsive">
             <table class="published-table">
@@ -225,7 +227,8 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { deleteMessage, getGradeSchedules, getMessages, getPublishedGrades, sendMessage } from '../services/dataService'
+import { deleteMessage, getGradeSchedules, getMessages, getPublishedGrades, getMessageAttachmentError, sendMessage } from '../services/dataService'
+import { sameAcademicPeriod } from '../services/academicPeriod'
 const sidebarOpen = ref(false)
 function toggleSidebar(){ sidebarOpen.value = !sidebarOpen.value }
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
@@ -240,6 +243,56 @@ const studentStatus = ref('No records')
 const totalUnits = ref(0)
 
 const publishedGrades = ref([])
+const gradeSchedules = ref([])
+function addSemesterOptions(periods, semesterLabel, schoolYear = '') {
+  const semesterMatch = semesterLabel.match(/(1st|2nd)\s+semester/i)
+  const yearMatch = (schoolYear || semesterLabel).match(/\d{4}\s*[-/]\s*(?:\d{2}|\d{4})/)
+  if (!semesterMatch) {
+    if (semesterLabel) periods.add(`${semesterLabel} ${schoolYear}`.trim())
+    return
+  }
+
+  const currentTerm = semesterMatch[1].toLowerCase() === '1st' ? '1st Semester' : '2nd Semester'
+  const nextTerm = currentTerm === '1st Semester' ? '2nd Semester' : '1st Semester'
+  if (!yearMatch) {
+    periods.add(`${currentTerm} ${schoolYear}`.trim())
+    periods.add(`${nextTerm} ${schoolYear}`.trim())
+    return
+  }
+
+  const year = yearMatch[0].replace(/\s+/g, '')
+  periods.add(`${currentTerm} ${year}`)
+  periods.add(`${nextTerm} ${year}`)
+}
+
+const semesterOptions = computed(() => {
+  const periods = new Set()
+  gradeSchedules.value.forEach(schedule => addSemesterOptions(periods, schedule.semester, schedule.schoolYear))
+  publishedGrades.value.forEach(sheet => {
+    if (sheet.semester) addSemesterOptions(periods, sheet.semester)
+  })
+  return periods.size
+    ? [...periods].sort((left, right) => right.localeCompare(left))
+    : ['1st Semester 2025-2026', '2nd Semester 2025-2026']
+})
+function semesterLockMessageFor(period) {
+  const gradePeriod = gradeSchedules.value.find(schedule =>
+    schedule.yearLevel === 'Grade Period' && sameAcademicPeriod(schedule.semester, schedule.schoolYear, period),
+  )
+  const opensOn = gradePeriod?.midtermOpens
+  if (!opensOn) return 'The registrar has not set the opening date for this semester yet.'
+  const openDate = new Date(`${opensOn}T00:00:00`)
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  if (Number.isNaN(openDate.getTime())) return 'The registrar has not set a valid opening date for this semester yet.'
+  if (openDate.getTime() <= today.getTime()) return ''
+  return `This semester opens on ${openDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}.`
+}
+const semesterLockMessage = computed(() => semesterLockMessageFor(semester.value))
+function isSemesterOptionLocked(period) {
+  return semesterLockMessageFor(period) !== ''
+}
+const isSemesterLocked = computed(() => semesterLockMessage.value !== '')
 const publishedPanel = ref(null)
 const messageSheet = ref(null)
 const messages = ref([])
@@ -257,6 +310,12 @@ const latestProfessorMessage = computed(() => [...messages.value].filter(message
 const latestMessageSheet = computed(() => publishedGrades.value.find(sheet => sheet.id === latestProfessorMessage.value?.gradeSheet?.id) || (latestProfessorMessage.value ? publishedGrades.value.find(sheet => sheet.professor_id === latestProfessorMessage.value.professorId) : null))
 const unreadProfessorMessages = computed(() => messages.value.filter(message => message.senderId !== props.user?.id && message.senderId !== message.studentId && !seenMessageIds.value.has(String(message.id))).length)
 
+watch(semesterOptions, options => {
+  if (!options.includes(semester.value)) {
+    semester.value = options.find(period => /^1st\s+semester/i.test(period)) || options[0] || ''
+  }
+}, { immediate: true })
+
 function markMessagesSeen(messageIds) {
   seenMessageIds.value = new Set([...seenMessageIds.value, ...messageIds.map(id => String(id))])
   localStorage.setItem(seenMessageStorageKey, JSON.stringify([...seenMessageIds.value]))
@@ -269,6 +328,73 @@ async function scrollStudentChatToBottom() {
 
 watch(subjectMessages, scrollStudentChatToBottom)
 let messageRefreshTimer
+let academicRefreshTimer
+
+function courseKey(course) {
+  return String(course || '').replace(/^sheet:/i, '').trim().toLowerCase()
+}
+
+function updateAcademicSummary() {
+  if (isSemesterLocked.value) {
+    const expectedCourses = new Set(gradeSchedules.value
+      .filter(schedule => schedule.yearLevel !== 'Grade Period' && sameAcademicPeriod(schedule.semester, schedule.schoolYear, semester.value))
+      .flatMap(schedule => schedule.courses || []).map(courseKey))
+    enrolledSubjects.value = expectedCourses.size
+    totalUnits.value = 0
+    studentStatus.value = 'Locked'
+    gwa.value = '-'
+    return
+  }
+
+  const activeSchedules = gradeSchedules.value.filter(schedule =>
+    schedule.yearLevel !== 'Grade Period'
+    && sameAcademicPeriod(schedule.semester, schedule.schoolYear, semester.value),
+  )
+  const expectedCourses = new Set(activeSchedules.flatMap(schedule => schedule.courses || []).map(courseKey))
+  const semesterGrades = publishedGrades.value.filter(sheet => sameAcademicPeriod(sheet.semester, '', semester.value))
+  const expectedGrades = expectedCourses.size
+    ? semesterGrades.filter(sheet => expectedCourses.has(String(sheet.id).toLowerCase()) || expectedCourses.has(courseKey(sheet.code)))
+    : semesterGrades
+  const completedGrades = expectedGrades.filter(sheet => {
+    const record = sheet.student_records?.[0]
+    return record
+      && [record.midterm, record.finals, record.finalGrade, record.gradePoint].every(value => String(value ?? '').trim() !== '')
+      && Number.isFinite(Number(record.gradePoint))
+  })
+  const expectedSubjectCount = expectedCourses.size || semesterGrades.length
+  const allGradesComplete = expectedCourses.size > 0
+    && [...expectedCourses].every(course => completedGrades.some(sheet =>
+      String(sheet.id).toLowerCase() === course || courseKey(sheet.code) === course,
+    ))
+  const allGradesPassed = allGradesComplete && completedGrades.every(sheet => {
+    const record = sheet.student_records?.[0]
+    return Number(record?.gradePoint) > 0
+      && Number(record?.gradePoint) <= 3
+      && String(record?.remarks || '').toUpperCase() === 'PASSED'
+  })
+  const gradeRows = completedGrades.map(sheet => ({
+    point: Number(sheet.student_records?.[0]?.gradePoint),
+    units: Number(sheet.units) || 0,
+  })).filter(row => Number.isFinite(row.point) && row.units > 0)
+
+  enrolledSubjects.value = expectedSubjectCount
+  totalUnits.value = expectedGrades.reduce((total, sheet) => total + (Number(sheet.units) || 0), 0)
+  studentStatus.value = allGradesPassed
+    ? 'Completed'
+    : expectedSubjectCount || semesterGrades.length ? 'Incomplete' : 'No records'
+  gwa.value = allGradesComplete && gradeRows.length === expectedSubjectCount
+    ? (gradeRows.reduce((total, row) => total + row.point * row.units, 0) / gradeRows.reduce((total, row) => total + row.units, 0)).toFixed(2)
+    : '-'
+}
+
+watch(semester, updateAcademicSummary)
+
+async function refreshStudentGrades() {
+  const [gradesResult, schedulesResult] = await Promise.allSettled([getPublishedGrades(), getGradeSchedules()])
+  if (gradesResult.status === 'fulfilled') publishedGrades.value = gradesResult.value
+  if (schedulesResult.status === 'fulfilled') gradeSchedules.value = schedulesResult.value
+  updateAcademicSummary()
+}
 
 async function refreshMessages() {
   try {
@@ -283,28 +409,10 @@ onMounted(async () => {
     const [gradesResult, schedulesResult, messagesResult] = await Promise.allSettled([getPublishedGrades(), getGradeSchedules(), getMessages()])
     publishedGrades.value = gradesResult.status === 'fulfilled' ? gradesResult.value : []
     messages.value = messagesResult.status === 'fulfilled' ? messagesResult.value : []
-    const schedules = schedulesResult.status === 'fulfilled' ? schedulesResult.value : []
-    const records = publishedGrades.value.flatMap(sheet => sheet.student_records || [])
-    const currentSemester = semester.value.split(' ')[0].toLowerCase()
-    const activeSchedules = schedules.filter(schedule => schedule.semester.toLowerCase().includes(currentSemester) && schedule.yearLevel !== 'Grade Period')
-    const expectedCourses = new Set(activeSchedules.flatMap(schedule => schedule.courses || []).map(course => course.replace(/^sheet:/, '').toLowerCase()))
-    const completedGrades = publishedGrades.value.filter(sheet => {
-      const record = sheet.student_records?.[0]
-      return record && [record.midterm, record.finals, record.finalGrade, record.gradePoint].every(value => String(value || '').trim()) && Number.isFinite(Number(record.gradePoint))
-    })
-    const expectedSubjectCount = expectedCourses.size || publishedGrades.value.length
-    const allGradesComplete = completedGrades.length === expectedSubjectCount && completedGrades.length > 0
-    const gradeRows = completedGrades.map(sheet => ({
-      point: Number(sheet.student_records?.[0]?.gradePoint),
-      units: Number(sheet.units) || 0,
-    })).filter(row => Number.isFinite(row.point) && row.units > 0)
-    enrolledSubjects.value = expectedSubjectCount
-    totalUnits.value = publishedGrades.value.reduce((total, sheet) => total + (Number(sheet.units) || 0), 0)
-    studentStatus.value = expectedSubjectCount && !allGradesComplete ? 'Incomplete' : publishedGrades.value.length ? 'Active' : 'No records'
-    gwa.value = allGradesComplete && gradeRows.length > 0
-      ? (gradeRows.reduce((total, row) => total + row.point * row.units, 0) / gradeRows.reduce((total, row) => total + row.units, 0)).toFixed(2)
-      : '-'
+    gradeSchedules.value = schedulesResult.status === 'fulfilled' ? schedulesResult.value : []
+    updateAcademicSummary()
     messageRefreshTimer = window.setInterval(refreshMessages, 5000)
+    academicRefreshTimer = window.setInterval(() => { void refreshStudentGrades() }, 15000)
   } catch {
     publishedGrades.value = []
     enrolledSubjects.value = 0
@@ -316,10 +424,11 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (messageRefreshTimer) window.clearInterval(messageRefreshTimer)
+  if (academicRefreshTimer) window.clearInterval(academicRefreshTimer)
 })
 
 const filteredPublished = computed(() => publishedGrades.value.filter(p => {
-  const matchesSemester = !semester.value || p.semester.toLowerCase().includes(semester.value.split(' ')[0].toLowerCase())
+  const matchesSemester = !isSemesterLocked.value && (!semester.value || sameAcademicPeriod(p.semester, '', semester.value))
   const query = searchPublished.value.toLowerCase()
   return matchesSemester && (!query || p.code.toLowerCase().includes(query) || p.subject.toLowerCase().includes(query))
 }))
@@ -372,6 +481,14 @@ function openLatestMessage() {
 
 function selectMessagePhoto(event) {
   const file = event.target.files?.[0] || null
+  if (file) {
+    const error = getMessageAttachmentError(file)
+    if (error) {
+      window.alert(error)
+      clearMessagePhoto()
+      return
+    }
+  }
   messagePhoto.value = file
   messagePhotoPreview.value = file ? URL.createObjectURL(file) : ''
 }
@@ -779,6 +896,46 @@ function signOut(){
   color: #000000;
   font-size: 8px;
   font-weight: 800;
+}
+
+.semester-lock-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid #d5c98a;
+  background: #fff8d9;
+  color: #584a14;
+  font-size: 13px;
+}
+
+.semester-lock-notice strong {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid #9e8b3c;
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.semester-lock-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid #d5c98a;
+  background: #fff8d9;
+  color: #584a14;
+  font-size: 13px;
+}
+
+.semester-lock-notice strong {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid #9e8b3c;
+  border-radius: 4px;
+  font-size: 10px;
 }
 
 .table-responsive {

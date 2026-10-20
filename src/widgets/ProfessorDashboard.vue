@@ -14,9 +14,32 @@
     </aside>
     <main class="prof-page">
       <header class="prof-header"><button v-if="isMobile" class="mobile-hamburger" type="button" aria-label="Open menu" @click="sidebarCollapsed = false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><h1>GRADE ENTRY</h1></header>
-      <div v-if="view === 'lists'" class="dashboard-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><div class="tabs"><button :class="{ selected: tab === 'lists' }" type="button" @click="tab = 'lists'">Class Lists</button><button :class="{ selected: tab === 'messages' }" type="button" @click="openMessages">Messages</button></div><section class="roster-panel"><div class="roster-heading"><h2>Student Rosters by Institute</h2><p>Browse enrolled students across all your assigned courses.</p></div><button v-for="institute in institutes" :key="institute.id" class="institute-line" :class="{ expanded: expandedInstitute === institute.id }" type="button" @click="toggleInstitute(institute.id)"><span>{{ expandedInstitute === institute.id ? '&#8964;' : '&#8250;' }}</span>{{ institute.name }}</button><template v-if="expandedInstitute"><div class="year-line"><strong>YEAR LEVEL:</strong><button v-for="year in years" :key="year" :class="{ chosen: selectedYear === year }" type="button" @click="selectedYear = year">{{ year }}</button></div><div v-for="group in visibleGroups" :key="group.name" class="course-group"><h3>{{ group.name }}</h3><div class="course-grid"><button v-for="course in group.courses" :key="course.code + course.section" class="course-card" type="button" @click="openGrades(course)"><small>{{ course.code }}</small><strong>{{ course.section }}</strong><span>1st Sem, A.Y 2025-26 | &#9673; {{ course.students }} Students</span></button></div></div></template></section></div>
-      <div v-else-if="view === 'messages'" class="messages-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><div class="tabs"><button type="button" @click="goToLists">Class Lists</button><button class="selected" type="button">Messages</button></div><div class="message-layout"><section class="conversation-list"><h2>Student Conversations</h2><button v-for="message in filteredMessages" :key="message.id" class="message-preview" :class="{ active: activeMessage.id === message.id }" type="button" @click="openConversation(message)"><strong>{{ message.name }}</strong><span>{{ message.preview }}</span><small>{{ message.id }} &bull; {{ message.section }}</small></button></section><section class="conversation"><div class="conversation-head"><div class="avatar">{{ activeMessage.name.charAt(0) }}</div><div><strong>{{ activeMessage.name }}</strong><small>{{ activeMessage.id }} &bull; {{ activeMessage.section }}</small></div><select v-model="messageAssessment" @change="openStudentGrade"><option>Midterm</option><option>Finals</option><option>Final Grade</option></select></div><div class="chat"><span class="chat-time">CONVERSATION</span><template v-if="activeMessage.messages?.length"><article v-for="message in activeMessage.messages" :key="message.id" class="message-bubble" :class="{ outgoing: message.senderId !== message.studentId }"><img v-if="message.attachmentUrl" :src="message.attachmentUrl" alt="Student attachment" /><p v-if="message.body">{{ message.body }}</p><button v-if="message.senderId === props.user?.id" type="button" class="unsend-button" aria-label="Unsend message" @click="unsendMessage(message.id)">Unsend</button><small>{{ message.createdAt ? new Date(message.createdAt).toLocaleString() : "" }}</small></article></template><p v-else class="message-empty">No messages yet.</p></div><div class="reply"><input v-model="replyText" placeholder="Type your reply..." /><button type="button" @click="sendProfessorReply">Send Reply</button></div></section></div></div>
-      <div v-else class="grades-content"><button class="back-link" type="button" @click="goToLists">&#8592; Return to Dashboard</button><div class="grade-toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><div class="grade-actions"><div class="choice-action"><button type="button" class="add-button" @click="toggleAddChoices">+ Add Assessment</button><div v-if="addChoiceOpen" class="assessment-choices" aria-label="Choose assessment type"><button type="button" @click="addAssessment('Quiz')">Quiz</button><button type="button" @click="addAssessment('Activity')">Activity</button><button type="button" @click="addAssessment('Recitation')">Recitation</button><button type="button" @click="addAssessment('Major Exam')">Major Exam</button></div></div><div class="choice-action"><button type="button" class="remove-button" :disabled="gradeHeaders.length <= 1" @click="toggleRemoveChoices">&#9632; Remove</button><div v-if="removeChoiceOpen" class="assessment-choices" aria-label="Choose assessment to remove"><button v-for="assessment in gradeHeaders" :key="assessment" type="button" @click="selectedAssessment = assessment; removeSelectedAssessment()">{{ assessment }}</button></div></div><div class="choice-action"><button type="button" class="restore-button" @click="toggleRestoreChoices">&#8634; Restore</button><div v-if="restoreChoiceOpen" class="assessment-choices" aria-label="Choose assessment to restore"><button v-for="assessment in defaultGradeHeaders" :key="assessment" type="button" :disabled="gradeHeaders.includes(assessment)" @click="selectedAssessment = assessment; restoreSelectedAssessment()">{{ assessment }}</button></div></div></div></div><div class="grade-columns"><section class="grade-table-card"><h2>{{ selectedCourse.name }} ({{ selectedCourse.section }})</h2><div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" :disabled="isGradeLocked('midterm')" @click="activePeriod = 'midterm'"><span v-if="isGradeLocked('midterm')" aria-hidden="true">&#128274;</span> Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" :disabled="isGradeLocked('finals')" @click="openFinalsByDeadline"><span v-if="isGradeLocked('finals')" aria-hidden="true">&#128274;</span> Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div><div class="table-scroll"><table class="grade-table"><thead><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">MIDTERM</th><th colspan="5">QUIZ</th><th colspan="4">ACTIVITY</th><th>RECI</th><th>M. Exam</th></tr><tr><th v-for="label in gradeHeaders" :key="label">{{ label }}</th></tr></thead><tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><td>{{ student.midterm }}</td><td v-for="label in gradeHeaders" :key="label"><input v-model="student.scores[label]" type="number" min="0" max="20" :disabled="isGradeLocked(activePeriod)" /></td></tr></tbody></table></div></section><aside class="summary-box"><h2>MIDTERM</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in midtermItems" :key="item.name"><td>{{ item.name }}</td><td>-</td><td>-</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>-</td></tr></tbody></table></aside></div><button class="submit-action-btn" type="button" @click="submitToRegistrar">Submit to Registrar</button><div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="finals-title"><div class="notice-icon">&#128197;</div><h2 id="finals-title">Hang tight - finals aren't ready yet</h2><p>The registrar sets when grading starts, so there's nothing to do here for now. We'll let you know the moment it's ready.</p><strong>Opens on {{ formatPeriodDate('finals') }}</strong><button type="button" @click="showFinalsNotice = false">Close</button></section></div></div>
+      <div v-if="view === 'lists'" class="dashboard-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><div class="tabs"><button :class="{ selected: tab === 'lists' }" type="button" @click="tab = 'lists'">Class Lists</button><button :class="{ selected: tab === 'messages' }" type="button" @click="openMessages">Messages</button></div><section class="roster-panel"><div class="roster-heading"><h2>Student Rosters by Institute</h2><p>Browse enrolled students across all your assigned courses.</p></div><button v-for="institute in institutes" :key="institute.id" class="institute-line" :class="{ expanded: expandedInstitute === institute.id }" type="button" @click="toggleInstitute(institute.id)"><span>{{ expandedInstitute === institute.id ? '&#8964;' : '&#8250;' }}</span>{{ institute.name }}</button><template v-if="expandedInstitute"><div class="year-line"><strong>YEAR LEVEL:</strong><button v-for="year in years" :key="year" :class="{ chosen: selectedYear === year }" type="button" @click="selectedYear = year">{{ year }}</button></div><div v-for="group in visibleGroups" :key="group.name" class="course-group"><h3>{{ group.name }}</h3><div class="course-grid"><button v-for="course in group.courses" :key="`${course.code}-${course.section}-${course.semester}`" class="course-card" type="button" @click="openGrades(course)"><small>{{ course.code }}</small><strong>{{ course.section }}</strong><span>{{ course.semester }} | &#9673; {{ course.students }} Students</span></button></div></div><p v-if="visibleGroups.length === 0" class="roster-empty">No courses for {{ selectedYear }}.</p></template></section></div>
+      <div v-else-if="view === 'messages'" class="messages-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><div class="tabs"><button type="button" @click="goToLists">Class Lists</button><button class="selected" type="button">Messages</button></div><div class="message-layout"><section class="conversation-list"><h2>Student Conversations</h2><button v-for="message in filteredMessages" :key="message.id" class="message-preview" :class="{ active: activeMessage.id === message.id }" type="button" @click="openConversation(message)"><strong>{{ message.name }}</strong><span>{{ message.preview }}</span><small>{{ message.id }} &bull; {{ message.section }}</small></button></section><section class="conversation"><div class="conversation-head"><div class="avatar">{{ activeMessage.name.charAt(0) }}</div><div><strong>{{ activeMessage.name }}</strong><small>{{ activeMessage.id }} &bull; {{ activeMessage.section }}</small></div><select v-model="messageAssessment" @change="openStudentGrade"><option>Midterm</option><option>Finals</option><option>Final Grade</option></select></div><div class="chat"><span class="chat-time">CONVERSATION</span><template v-if="activeMessage.messages?.length"><article v-for="message in activeMessage.messages" :key="message.id" class="message-bubble" :class="{ outgoing: message.senderId !== message.studentId }"><img v-if="message.attachmentUrl" :src="message.attachmentUrl" alt="Student attachment" /><p v-if="message.body">{{ message.body }}</p><button v-if="message.senderId === props.user?.id" type="button" class="unsend-button" aria-label="Unsend message" @click="unsendMessage(message.id)">Unsend</button><small>{{ message.createdAt ? new Date(message.createdAt).toLocaleString() : "" }}</small></article></template><p v-else class="message-empty">No messages yet.</p></div><div class="reply"><input ref="professorMessageFileInput" type="file" accept="image/*" hidden @change="selectProfessorMessagePhoto" /><button type="button" class="reply-attachment" aria-label="Attach photo" @click="professorMessageFileInput?.click()">Photo</button><span v-if="professorMessagePhoto" class="reply-photo-name">{{ professorMessagePhoto.name }}</span><input v-model="replyText" placeholder="Type your reply..." /><button type="button" @click="sendProfessorReply">Send Reply</button></div></section></div></div>
+      <div v-else class="grades-content">
+        <button class="back-link" type="button" @click="goToLists">&#8592; Return to Dashboard</button>
+        <div class="grade-toolbar">
+          <label class="search-box"><input v-model="searchStudent" placeholder="Search student name or ID..." /></label>
+          <div class="grade-actions">
+            <div class="choice-action"><button type="button" class="add-button" @click="toggleAddChoices">+ Add Assessment</button><div v-if="addChoiceOpen" class="assessment-choices"><button v-for="category in ['Quiz', 'Lab', 'Assignment', 'Recitation', 'Major Exam']" :key="category" type="button" @click="addAssessment(category)">{{ category }}</button></div></div>
+            <div class="choice-action"><button type="button" class="remove-button" :disabled="gradeHeaders.length <= 1" @click="toggleRemoveChoices">Remove</button><div v-if="removeChoiceOpen" class="assessment-choices"><button v-for="assessment in gradeHeaders" :key="assessment" type="button" @click="selectedAssessment = assessment; removeSelectedAssessment()">{{ assessment }}</button></div></div>
+            <div class="choice-action"><button type="button" class="restore-button" @click="toggleRestoreChoices">Restore</button><div v-if="restoreChoiceOpen" class="assessment-choices"><button v-for="assessment in defaultGradeHeaders" :key="assessment" type="button" :disabled="gradeHeaders.includes(assessment)" @click="selectedAssessment = assessment; restoreSelectedAssessment()">{{ assessment }}</button></div></div>
+          </div>
+        </div>
+        <div class="grade-columns">
+          <section class="grade-table-card">
+            <h2>{{ selectedCourse.name }} ({{ selectedCourse.section }})</h2>
+            <div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" @click="activePeriod = 'midterm'">Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" @click="openFinalsByDeadline">Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div>
+            <div class="table-scroll"><table class="grade-table">
+              <thead><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">{{ activePeriod === 'final-grade' ? 'FINAL GRADE' : activePeriod.toUpperCase() }}</th><th v-for="group in gradeGroups" :key="group.category" :colspan="Math.max(group.headers.length, 1)">{{ group.name }}</th></tr><tr><template v-for="group in gradeGroups" :key="group.category"><th v-if="!group.headers.length">-</th><th v-for="label in group.headers" :key="label">{{ label }}</th></template></tr></thead>
+              <tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><td>{{ displayGrade(student, activePeriod) }}</td><template v-for="group in gradeGroups" :key="group.category"><td v-if="!group.headers.length">-</td><td v-for="label in group.headers" :key="label"><input v-model="student.scores[activeScorePeriod][label]" type="number" min="0" max="100" :disabled="activePeriod === 'final-grade' || isGradeLocked(activeScorePeriod)" /></td></template></tr></tbody>
+            </table></div>
+          </section>
+          <aside class="summary-box"><h2>{{ activePeriod === 'finals' ? 'FINALS' : activePeriod === 'final-grade' ? 'FINAL GRADE' : 'MIDTERM' }}</h2><table><thead><tr><th>Item</th><th>Weight</th></tr></thead><tbody><tr v-for="item in rubricItems" :key="item.name"><td>{{ item.name }}</td><td>{{ item.weight }}%</td></tr><tr class="total"><td>TOTAL</td><td>100%</td></tr></tbody></table></aside>
+        </div>
+        <button class="submit-action-btn" type="button" :disabled="activePeriod === 'final-grade'" @click="submitToRegistrar">{{ activePeriod === 'final-grade' ? 'Final Grade Calculated Automatically' : 'Submit to Registrar' }}</button>
+        <div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="finals-title"><div class="notice-icon">&#128197;</div><h2 id="finals-title">Hang tight - finals aren't ready yet</h2><p>The registrar sets when grading starts, so there's nothing to do here for now. We'll let you know the moment it's ready.</p><strong>Opens on {{ formatPeriodDate('finals') }}</strong><button type="button" @click="showFinalsNotice = false">Close</button></section></div>
+      </div>
     </main>
   </div>
 </template>
@@ -24,16 +47,49 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
-import { deleteMessage, getGradeSchedules, getGradeSheets, getMessages, getStudents, groupMessages, sendMessage, submitGradeSheet } from '../services/dataService'
+import { deleteMessage, getGradeSchedules, getGradeSheets, getMessages, getStudents, groupMessages, getMessageAttachmentError, sendMessage, submitGradeSheet } from '../services/dataService'
+import { GRADING_WEIGHTS, assessmentCategory, normalizePeriodScores, calculateRecordGrades, calculateTermGrade } from '../services/grading'
+import { sameAcademicPeriod } from '../services/academicPeriod'
 const activeRoster = ref([])
+const professorMessageFileInput = ref(null)
+const professorMessagePhoto = ref(null)
 const props = defineProps({ user: { type: Object, default: null } })
 const emit = defineEmits(['signout', 'submitted'])
-const isMobile = ref(window.innerWidth <= 768); const sidebarCollapsed = ref(false); const view = ref('lists'); const tab = ref('lists'); const searchStudent = ref(''); const selectedSection = ref('all'); const selectedYear = ref('1st Year'); const expandedInstitute = ref(''); const messageAssessment = ref('Midterm'); const activePeriod = ref('midterm'); const selectedAssessment = ref('Q1'); const addChoiceOpen = ref(false); const removeChoiceOpen = ref(false); const restoreChoiceOpen = ref(false); const showFinalsNotice = ref(false); const submissionNotice = ref(false); const submissionSent = ref(false); const replyText = ref(''); const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']; const defaultGradeHeaders = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'A1', 'A2', 'A3', 'A4', 'R1', 'Mid Ex']; const gradeHeaders = reactive([...defaultGradeHeaders]); const midtermItems = [{ name: 'Quiz' }, { name: 'Activity' }, { name: 'Recitation' }, { name: 'Major Exam' }]
+const isMobile = ref(window.innerWidth <= 768); const sidebarCollapsed = ref(false); const view = ref('lists'); const tab = ref('lists'); const searchStudent = ref(''); const selectedSection = ref('all'); const selectedYear = ref('1st Year'); const expandedInstitute = ref(''); const messageAssessment = ref('Midterm'); const activePeriod = ref('midterm'); const selectedAssessment = ref('Q1'); const addChoiceOpen = ref(false); const removeChoiceOpen = ref(false); const restoreChoiceOpen = ref(false); const showFinalsNotice = ref(false); const submissionNotice = ref(false); const submissionSent = ref(false); const replyText = ref(''); const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']; const defaultGradeHeaders = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'L1', 'A1', 'A2', 'A3', 'A4', 'R1', 'Mid Ex']
+const gradeHeaders = reactive([...defaultGradeHeaders]);
+const midtermItems = [{ name: 'Quiz' }, { name: 'Activity' }, { name: 'Recitation' }, { name: 'Major Exam' }]
 const gradePeriods = ref([])
 const gradeSheets = ref([])
 const currentClock = ref(Date.now())
 const unreadMessageIds = ref(new Set())
 const unreadMessageCount = computed(() => unreadMessageIds.value.size)
+const activeScorePeriod = computed(() => activePeriod.value === 'finals' ? 'finals' : 'midterm')
+const gradeGroups = computed(() => [
+  { name: 'QUIZ', category: 'quiz' },
+  { name: 'LAB', category: 'lab' },
+  { name: 'RECITATION', category: 'recitation' },
+  { name: 'ASSIGNMENT', category: 'assignment' },
+  { name: 'MAJOR EXAM', category: 'major_exam' },
+].map(group => ({ ...group, headers: gradeHeaders.filter(header => assessmentCategory(header) === group.category) })))
+const rubricItems = computed(() => activePeriod.value === 'final-grade'
+  ? [{ name: 'Midterm', weight: 40 }, { name: 'Finals', weight: 60 }]
+  : Object.entries(GRADING_WEIGHTS[activeScorePeriod.value]).map(([key, weight]) => ({
+    name: { quiz: 'Quiz', lab: 'Lab', recitation: 'Recitation', assignment: 'Assignment', major_exam: 'Major Exam' }[key],
+    weight,
+  })))
+
+function gradeResult(student) {
+  return calculateRecordGrades(student.scores || { midterm: {}, finals: {} }, gradeHeaders)
+}
+
+function displayGrade(student, period) {
+  if (period !== 'final-grade') {
+    const termGrade = calculateTermGrade(student.scores || { midterm: {}, finals: {} }, period, gradeHeaders)
+    return termGrade === null ? 'Incomplete' : `${termGrade.toFixed(2)}%`
+  }
+  const grades = gradeResult(student)
+  return grades ? `${grades.finalGrade} (${grades.gradePoint})` : 'Incomplete'
+}
 
 function resolveDeadline(dateValue) {
   if (!dateValue) return null
@@ -42,7 +98,11 @@ function resolveDeadline(dateValue) {
 }
 
 function getGradePeriod(type) {
-  const period = gradePeriods.value[0]
+  const period = gradePeriods.value.find(item => sameAcademicPeriod(
+    item.semester,
+    item.schoolYear,
+    selectedCourse.value.semester || '',
+  ))
   if (!period) return null
   return {
     opens: resolveDeadline(type === 'midterm' ? period.midtermOpens : period.finalsOpens),
@@ -65,11 +125,10 @@ function formatPeriodDate(type) {
 }
 
 function openFinalsByDeadline() {
+  activePeriod.value = 'finals'
   if (isGradeLocked('finals')) {
     showFinalsNotice.value = true
-    return
   }
-  activePeriod.value = 'finals'
 }
 function instituteForSection(section = '') {
   const program = section.split(' -')[0].trim().toUpperCase()
@@ -101,13 +160,32 @@ const institutes = computed(() => {
       units: sheet.units,
       name: sheet.subject,
       semester: sheet.semester,
+      rejection_reason: sheet.rejection_reason,
       student_records: sheet.student_records || [],
     })
   })
   return [...instituteMap.values()]
 })
 
-const selectedInstitute = computed(() => institutes.value.find(institute => institute.id === expandedInstitute.value) || institutes.value[0] || { groups: [] }); const visibleGroups = computed(() => (selectedInstitute.value.groups || []).map(group => ({ ...group, courses: group.courses.filter(course => selectedSection.value === 'all' || course.section.includes(selectedSection.value)) }))); const sections = computed(() => institutes.value.flatMap(institute => institute.groups.flatMap(group => group.courses.map(course => course.section)))); const messages = reactive([]); const openMessageMenuId = ref(null); const chatContainer = ref(null); const activeMessage = ref({ id: '', name: '', section: '', preview: '', course: { name: '', section: '' } }); const selectedCourse = ref({ name: '', section: '' }); const gradeStudents = reactive([]); const hasIncompleteGrades = computed(() => gradeStudents.length === 0 || gradeStudents.some(student => !String(student.id || '').trim() || !String(student.name || '').trim() || !String(student.midterm || '').trim() || !String(student.finals || '').trim() || !String(student.finalGrade || '').trim() || !String(student.gradePoint || '').trim())); const filteredMessages = computed(() => groupMessages(messages).map(thread => ({ id: thread.studentNumber || thread.key, name: thread.studentName || 'Student', section: thread.course.section, preview: thread.messages.at(-1)?.body || 'Photo attachment', course: thread.course, studentId: thread.studentId, studentNumber: thread.studentNumber, gradeSheetId: thread.gradeSheetId, senderId: thread.messages.at(-1)?.senderId, unreadCount: thread.unreadCount, messages: [...thread.messages].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || '')) })).filter(message => `${message.name} ${message.id}`.toLowerCase().includes(searchStudent.value.toLowerCase())).sort((left, right) => { const leftTime = left.messages.at(-1)?.createdAt || ''; const rightTime = right.messages.at(-1)?.createdAt || ''; return leftTime.localeCompare(rightTime) }));
+const selectedInstitute = computed(() => institutes.value.find(institute => institute.id === expandedInstitute.value) || institutes.value[0] || { groups: [] })
+const visibleGroups = computed(() => (selectedInstitute.value.groups || []).map(group => ({
+  ...group,
+  courses: group.courses.filter(course => {
+    const courseYear = String(course.section || '').match(/\b([1-4])[A-D]?\b/i)?.[1]
+    const matchesYear = courseYear === selectedYear.value.charAt(0)
+    const matchesSection = selectedSection.value === 'all' || course.section.includes(selectedSection.value)
+    return matchesYear && matchesSection
+  }),
+})).filter(group => group.courses.length > 0))
+const sections = computed(() => institutes.value.flatMap(institute => institute.groups.flatMap(group => group.courses.map(course => course.section))))
+const messages = reactive([])
+const openMessageMenuId = ref(null)
+const chatContainer = ref(null)
+const activeMessage = ref({ id: '', name: '', section: '', preview: '', course: { name: '', section: '' } })
+const selectedCourse = ref({ name: '', section: '' })
+const gradeStudents = reactive([])
+const hasIncompleteGrades = computed(() => gradeStudents.length === 0 || gradeStudents.some(student => !String(student.id || '').trim() || !String(student.name || '').trim() || !String(student.midterm || '').trim() || !String(student.finals || '').trim() || !String(student.finalGrade || '').trim() || !String(student.gradePoint || '').trim()))
+const filteredMessages = computed(() => groupMessages(messages).map(thread => ({ id: thread.studentNumber || thread.key, name: thread.studentName || 'Student', section: thread.course.section, preview: thread.messages.at(-1)?.body || 'Photo attachment', course: thread.course, studentId: thread.studentId, studentNumber: thread.studentNumber, gradeSheetId: thread.gradeSheetId, senderId: thread.messages.at(-1)?.senderId, unreadCount: thread.unreadCount, messages: [...thread.messages].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || '')) })).filter(message => `${message.name} ${message.id}`.toLowerCase().includes(searchStudent.value.toLowerCase())).sort((left, right) => { const leftTime = left.messages.at(-1)?.createdAt || ''; const rightTime = right.messages.at(-1)?.createdAt || ''; return leftTime.localeCompare(rightTime) }));
 function scrollChatToBottom() {
   nextTick(() => {
     const container = chatContainer.value || document.querySelector('.conversation .chat')
@@ -145,9 +223,25 @@ function openGrades(course) {
       && (!classLetter || !studentSection || studentSection === classLetter)
   })
   const savedRecords = new Map((selectedCourse.value.student_records || []).map(record => [record.id, record]))
-  const loadedRoster = roster.map(student => ({ ...student, ...(savedRecords.get(student.id) || {}), scores: { ...(student.scores || {}), ...(savedRecords.get(student.id)?.scores || {}) } }))
+  const rosterById = new Map(roster.map(student => [student.id, student]))
+  savedRecords.forEach(saved => {
+    if (!rosterById.has(saved.id)) rosterById.set(saved.id, { id: saved.id, name: saved.name })
+  })
+  const loadedRoster = [...rosterById.values()].map(student => {
+    const saved = savedRecords.get(student.id)
+    const periodScores = normalizePeriodScores(saved?.scores || student.scores || {})
+    gradeHeaders.forEach(label => {
+      periodScores.midterm[label] ??= ''
+      periodScores.finals[label] ??= ''
+    })
+    return { ...student, ...(saved || {}), scores: periodScores }
+  })
   activeRoster.value = loadedRoster
-  originalGradeStudents.splice(0, originalGradeStudents.length, ...loadedRoster.map(student => ({ ...student, scores: { ...(student.scores || {}) } })))
+  originalGradeStudents.splice(0, originalGradeStudents.length, ...loadedRoster.map(student => ({
+    ...student,
+    scores: { midterm: { ...student.scores.midterm }, finals: { ...student.scores.finals } },
+  })))
+  allGradeStudents.splice(0, allGradeStudents.length, ...loadedRoster)
   gradeStudents.splice(0, gradeStudents.length, ...loadedRoster)
   activePeriod.value = 'midterm'
   view.value = 'grades'
@@ -158,25 +252,36 @@ function openFinals() {
 }
 
 async function submitToRegistrar() {
-  const records = gradeStudents
-    .filter(student => student.id.trim() && student.name.trim())
-    .map(student => ({
-      id: student.id.trim(),
-      name: student.name.trim(),
-      midterm: student.midterm || '',
-      finals: student.finals || '',
-      finalGrade: student.finalGrade || '',
-      gradePoint: student.gradePoint || '',
-      remarks: student.remarks || '',
-      scores: student.scores || {},
-    }))
+  if (activePeriod.value === 'final-grade') {
+    window.alert('Final Grade is calculated automatically after both Midterm and Finals are complete.')
+    return
+  }
 
-  if (!records.length || records.length !== gradeStudents.length) {
+  const period = activePeriod.value
+  const records = allGradeStudents
+    .filter(student => student.id.trim() && student.name.trim())
+    .map(student => {
+      const grades = gradeResult(student)
+      const periodGrade = calculateTermGrade(student.scores || { midterm: {}, finals: {} }, period, gradeHeaders)
+      return {
+        id: student.id.trim(),
+        name: student.name.trim(),
+        midterm: grades?.midterm || (period === 'midterm' ? periodGrade?.toFixed(2) : student.midterm) || '',
+        finals: grades?.finals || (period === 'finals' ? periodGrade?.toFixed(2) : student.finals) || '',
+        finalGrade: grades?.finalGrade || '',
+        gradePoint: grades?.gradePoint || '',
+        remarks: grades?.remarks || '',
+        periodGrade,
+        scores: { [period]: student.scores?.[period] || {} },
+      }
+    })
+
+  if (!records.length || records.length !== allGradeStudents.length) {
     window.alert('Enter a student ID and name for every row before submitting.')
     return
   }
-  if (records.some(student => !student.midterm.trim() || !student.finals.trim() || !student.finalGrade.trim() || !student.gradePoint.trim())) {
-    window.alert('Complete the midterm, finals, final grade, and grade point for every student before submitting.')
+  if (records.some(student => student.periodGrade === null)) {
+    window.alert(`Enter a 0–100 score for every assessment category in ${period === 'midterm' ? 'Midterm' : 'Finals'} before submitting.`)
     return
   }
   if (!selectedCourse.value.code || !selectedCourse.value.semester) {
@@ -189,7 +294,7 @@ async function submitToRegistrar() {
   }
 
   try {
-    await submitGradeSheet({
+    const savedSheet = await submitGradeSheet({
       code: selectedCourse.value.code,
       subject: selectedCourse.value.name,
       section: selectedCourse.value.section,
@@ -199,7 +304,11 @@ async function submitToRegistrar() {
       units: Number(selectedCourse.value.units),
       submitted: new Date().toLocaleDateString('en-US'),
       status: 'Submitted',
-    }, records)
+    }, records.map(({ periodGrade, ...record }) => record), period)
+    const savedSheetIndex = gradeSheets.value.findIndex(sheet => sheet.id === savedSheet.id)
+    if (savedSheetIndex === -1) gradeSheets.value.unshift(savedSheet)
+    else gradeSheets.value[savedSheetIndex] = savedSheet
+    selectedCourse.value = { ...selectedCourse.value, ...savedSheet, rejection_reason: null }
     submissionSent.value = true
     emit('submitted')
   } catch (error) {
@@ -239,25 +348,63 @@ function openStudentGrade() {
   const sheet = gradeSheets.value.find(item => item.id === activeMessage.value.gradeSheetId)
   const record = sheet?.student_records?.find(item => item.id === activeMessage.value.studentNumber)
   if (!record || !sheet) return
-  gradeStudents.splice(0, gradeStudents.length, { id: record.id, name: record.name, midterm: record.midterm || '', finals: record.finals || '', finalGrade: record.finalGrade || '', gradePoint: record.gradePoint || '', remarks: record.remarks || '', scores: record.scores || {} })
-  allGradeStudents.splice(0, allGradeStudents.length, ...gradeStudents)
-  selectedCourse.value = { code: sheet.code, name: sheet.subject, section: sheet.section, semester: sheet.semester, units: sheet.units }
+  const sheetStudents = sheet.student_records.map(student => {
+    const scores = normalizePeriodScores(student.scores || {})
+    gradeHeaders.forEach(label => {
+      scores.midterm[label] ??= ''
+      scores.finals[label] ??= ''
+    })
+    return {
+      id: student.id,
+      name: student.name,
+      midterm: student.midterm || '',
+      finals: student.finals || '',
+      finalGrade: student.finalGrade || '',
+      gradePoint: student.gradePoint || '',
+      remarks: student.remarks || '',
+      scores,
+    }
+  })
+  activeRoster.value = sheetStudents
+  allGradeStudents.splice(0, allGradeStudents.length, ...sheetStudents)
+  originalGradeStudents.splice(0, originalGradeStudents.length, ...sheetStudents.map(student => ({
+    ...student,
+    scores: { midterm: { ...student.scores.midterm }, finals: { ...student.scores.finals } },
+  })))
+  gradeStudents.splice(0, gradeStudents.length, ...sheetStudents)
+  selectedCourse.value = { code: sheet.code, name: sheet.subject, section: sheet.section, semester: sheet.semester, units: sheet.units, rejection_reason: sheet.rejection_reason }
   activePeriod.value = messageAssessment.value === 'Finals' ? 'finals' : messageAssessment.value === 'Final Grade' ? 'final-grade' : 'midterm'
   view.value = 'grades'
 }
 
 async function sendProfessorReply() {
-  if (!replyText.value.trim() || !activeMessage.value.studentId) return
+  if ((!replyText.value.trim() && !professorMessagePhoto.value) || !activeMessage.value.studentId) return
   try {
-    const message = await sendMessage({ studentId: activeMessage.value.studentId, gradeSheetId: activeMessage.value.gradeSheetId, body: replyText.value.trim() })
+    const message = await sendMessage({ studentId: activeMessage.value.studentId, gradeSheetId: activeMessage.value.gradeSheetId, body: replyText.value.trim(), attachment: professorMessagePhoto.value || undefined })
     const replyMessage = { ...message, id: String(message.id), name: message.studentName || activeMessage.value.name, section: message.gradeSheet?.section || activeMessage.value.section, preview: message.body || '', course: { name: message.gradeSheet?.subject || activeMessage.value.course.name, section: message.gradeSheet?.section || activeMessage.value.course.section }, studentId: message.studentId, studentNumber: message.studentNumber, gradeSheetId: message.gradeSheet?.id, senderId: message.senderId }
     messages.push(replyMessage)
     activeMessage.value.messages = [...(activeMessage.value.messages || []), replyMessage].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || ''))
     replyText.value = ''
+    professorMessagePhoto.value = null
+    if (professorMessageFileInput.value) professorMessageFileInput.value.value = ''
     scrollChatToBottom()
   } catch (error) {
     window.alert(error instanceof Error ? error.message : 'Unable to send reply.')
   }
+}
+
+function selectProfessorMessagePhoto(event) {
+  const file = event.target.files?.[0] || null
+  if (file) {
+    const error = getMessageAttachmentError(file)
+    if (error) {
+      window.alert(error)
+      event.target.value = ''
+      professorMessagePhoto.value = null
+      return
+    }
+  }
+  professorMessagePhoto.value = file
 }
 
 async function unsendMessage(messageId) {
@@ -303,12 +450,19 @@ watch(() => view.value, (nextView) => {
 })
 
 function addAssessment(category = 'Quiz') {
-  const prefixes = { Quiz: 'Q', Activity: 'A', Recitation: 'R', 'Major Exam': 'Mid Ex' }
+  const prefixes = { Quiz: 'Q', Lab: 'L', Assignment: 'A', Activity: 'A', Recitation: 'R', 'Major Exam': 'Mid Ex' }
   const prefix = prefixes[category]
   const matchingHeaders = gradeHeaders.filter(header => header.startsWith(prefix))
   const label = prefix === 'Mid Ex' ? `${prefix}${matchingHeaders.length + 1}` : `${prefix}${matchingHeaders.length + 1}`
   gradeHeaders.push(label)
-  gradeStudents.forEach(student => { student.scores[label] = '' })
+  allGradeStudents.forEach(student => {
+    student.scores.midterm[label] = ''
+    student.scores.finals[label] = ''
+  })
+  gradeStudents.forEach(student => {
+    student.scores.midterm[label] = ''
+    student.scores.finals[label] = ''
+  })
   selectedAssessment.value = label
   addChoiceOpen.value = false
 }
@@ -323,7 +477,14 @@ function removeAssessment() {
   const index = gradeHeaders.indexOf(selectedAssessment.value)
   if (index === -1 || gradeHeaders.length <= 1) return
   const [label] = gradeHeaders.splice(index, 1)
-  gradeStudents.forEach(student => { delete student.scores[label] })
+  allGradeStudents.forEach(student => {
+    delete student.scores.midterm[label]
+    delete student.scores.finals[label]
+  })
+  gradeStudents.forEach(student => {
+    delete student.scores.midterm[label]
+    delete student.scores.finals[label]
+  })
   selectedAssessment.value = gradeHeaders[Math.max(0, index - 1)]
 }
 
@@ -332,9 +493,15 @@ function restoreAssessment() {
   const originalIndex = defaultGradeHeaders.indexOf(selectedAssessment.value)
   if (originalIndex === -1) return
   gradeHeaders.splice(Math.min(originalIndex, gradeHeaders.length), 0, selectedAssessment.value)
-  const originalScores = new Map(originalGradeStudents.map(student => [student.id, student.scores?.[selectedAssessment.value] || '']))
-  allGradeStudents.forEach(student => { student.scores[selectedAssessment.value] = originalScores.get(student.id) || '' })
-  gradeStudents.forEach(student => { student.scores[selectedAssessment.value] = originalScores.get(student.id) || '' })
+  const originalScores = new Map(originalGradeStudents.map(student => [student.id, student.scores || {}]))
+  allGradeStudents.forEach(student => {
+    student.scores.midterm[selectedAssessment.value] = originalScores.get(student.id)?.midterm?.[selectedAssessment.value] || ''
+    student.scores.finals[selectedAssessment.value] = originalScores.get(student.id)?.finals?.[selectedAssessment.value] || ''
+  })
+  gradeStudents.forEach(student => {
+    student.scores.midterm[selectedAssessment.value] = originalScores.get(student.id)?.midterm?.[selectedAssessment.value] || ''
+    student.scores.finals[selectedAssessment.value] = originalScores.get(student.id)?.finals?.[selectedAssessment.value] || ''
+  })
 }
 
 function toggleRemoveChoices() {
@@ -364,8 +531,14 @@ function restoreSelectedAssessment() {
 function restoreGrades() {
   searchStudent.value = ''
   gradeHeaders.splice(0, gradeHeaders.length, ...defaultGradeHeaders)
-  const restoredStudents = originalGradeStudents.map(student => ({ ...student, scores: { ...student.scores } }))
-  allGradeStudents.splice(0, allGradeStudents.length, ...restoredStudents.map(student => ({ ...student, scores: { ...student.scores } })))
+  const restoredStudents = originalGradeStudents.map(student => ({
+    ...student,
+    scores: { midterm: { ...student.scores.midterm }, finals: { ...student.scores.finals } },
+  }))
+  allGradeStudents.splice(0, allGradeStudents.length, ...restoredStudents.map(student => ({
+    ...student,
+    scores: { midterm: { ...student.scores.midterm }, finals: { ...student.scores.finals } },
+  })))
   gradeStudents.splice(0, gradeStudents.length, ...restoredStudents)
   selectedAssessment.value = defaultGradeHeaders[0]
 }
@@ -407,7 +580,7 @@ onMounted(async () => {
     const schedules = schedulesResult.value
     const sheets = sheetsResult.value
     const loadedMessages = messagesResult.status === 'fulfilled' ? messagesResult.value : []
-    const records = students.map(student => ({ id: student.student_id, name: student.name, institute: student.institute, course: student.course, year_level: student.year_level, section: student.section, midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: {} }))
+    const records = students.map(student => ({ id: student.student_id, name: student.name, institute: student.institute, course: student.course, year_level: student.year_level, section: student.section, midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: { midterm: Object.fromEntries(gradeHeaders.map(label => [label, ''])), finals: Object.fromEntries(gradeHeaders.map(label => [label, ''])) } }))
     originalGradeStudents.splice(0, originalGradeStudents.length, ...records.map(student => ({ ...student, scores: { ...student.scores } })))
     allGradeStudents.splice(0, allGradeStudents.length, ...records)
     activeRoster.value = records
@@ -523,9 +696,10 @@ onUnmounted(() => {
   left: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, minmax(42px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 4px;
-  min-width: 150px;
+  width: 210px;
+  max-width: calc(100vw - 20px);
   padding: 5px;
   border: 1px solid #bbb;
   border-radius: 7px;
@@ -534,6 +708,9 @@ onUnmounted(() => {
 }
 
 .grade-actions .assessment-choices button {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
   padding: 5px 6px;
   border: 1px solid #bbb;
   border-radius: 4px;
@@ -541,6 +718,9 @@ onUnmounted(() => {
   color: #222;
   cursor: pointer;
   font-size: 12px;
+  line-height: 1.2;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .grade-actions .assessment-choices button:disabled {

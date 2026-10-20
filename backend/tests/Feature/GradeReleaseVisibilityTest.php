@@ -121,6 +121,227 @@ class GradeReleaseVisibilityTest extends TestCase
         (new GradeSheetController())->store($request);
     }
 
+    public function test_professor_submission_flows_through_registrar_to_student_with_computed_grades(): void
+    {
+        $professor = User::factory()->create(['role' => 'professor', 'api_token' => 'professor-flow-token']);
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'registrar-flow-token']);
+        $student = User::factory()->create(['role' => 'student', 'student_id' => 'S-FLOW-001', 'api_token' => 'student-flow-token']);
+        $termScores = ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100];
+        $submissionData = [
+            'code' => 'FLOW101',
+            'subject' => 'Workflow Test',
+            'section' => 'BSIT - 1A',
+            'semester' => '1st Semester',
+            'students' => 1,
+            'units' => 3,
+            'student_records' => [[
+                'id' => 'S-FLOW-001',
+                'name' => $student->name,
+                'scores' => [
+                    'midterm' => [...$termScores, 'Mid Ex' => 80],
+                    'finals' => $termScores,
+                ],
+            ]],
+        ];
+        $submissionResponse = $this->withToken($professor->api_token)->postJson('/api/grade-sheets', $submissionData)->assertCreated();
+        $submission = $submissionResponse->json('grade_sheet');
+
+        $this->assertSame('92.00', $submission['student_records'][0]['midterm']);
+        $this->assertSame('100.00', $submission['student_records'][0]['finals']);
+        $this->assertSame('96.80', $submission['student_records'][0]['finalGrade']);
+        $this->assertSame('1.25', $submission['student_records'][0]['gradePoint']);
+        $this->assertSame('PASSED', $submission['student_records'][0]['remarks']);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-sheets/' . $submission['id'] . '/status', [
+                'status' => 'Submitted',
+                'rejection_reason' => 'Please review the quiz scores.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('grade_sheet.rejection_reason', 'Please review the quiz scores.');
+
+        $this->withToken($professor->api_token)
+            ->getJson('/api/grade-sheets')
+            ->assertOk()
+            ->assertJsonPath('grade_sheets.0.rejection_reason', 'Please review the quiz scores.');
+
+        $resubmission = $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', $submissionData)
+            ->assertCreated()
+            ->json('grade_sheet');
+        $this->assertNull($resubmission['rejection_reason']);
+
+        foreach (['Approved', 'Published'] as $status) {
+            $this->withToken($registrar->api_token)
+                ->patchJson('/api/grade-sheets/' . $resubmission['id'] . '/status', ['status' => $status])
+                ->assertOk()
+                ->assertJsonPath('grade_sheet.status', $status);
+        }
+
+        $published = $this->withToken($student->api_token)
+            ->getJson('/api/published-grades')
+            ->assertOk()
+            ->json('grade_sheets');
+
+        $this->assertCount(1, $published);
+        $this->assertSame('FLOW101', $published[0]['code']);
+        $this->assertSame('96.80', $published[0]['student_records'][0]['finalGrade']);
+        $this->assertSame('1.25', $published[0]['student_records'][0]['gradePoint']);
+        $this->assertSame('PASSED', $published[0]['student_records'][0]['remarks']);
+    }
+
+    public function test_midterm_and_finals_can_be_submitted_separately_and_second_semester_stays_separate(): void
+    {
+        $professor = User::factory()->create(['role' => 'professor', 'api_token' => 'separate-period-professor-token']);
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'separate-period-registrar-token']);
+        $termScores = ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 80];
+        $sheetData = [
+            'code' => 'TWOTERM101',
+            'subject' => 'Two Term Course',
+            'section' => 'BSIT - 1A',
+            'semester' => '1st Semester 2025-2026',
+            'students' => 1,
+            'units' => 3,
+            'student_records' => [[
+                'id' => 'S-TWO-TERM',
+                'name' => 'Two Term Student',
+                'scores' => ['midterm' => $termScores],
+            ]],
+        ];
+
+        $midtermSubmission = $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', [...$sheetData, 'period' => 'midterm'])
+            ->assertCreated()
+            ->json('grade_sheet');
+
+        $this->assertSame('92.00', $midtermSubmission['student_records'][0]['midterm']);
+        $this->assertSame('', $midtermSubmission['student_records'][0]['finals']);
+        $this->assertSame('', $midtermSubmission['student_records'][0]['finalGrade']);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-sheets/' . $midtermSubmission['id'] . '/status', ['status' => 'Approved'])
+            ->assertUnprocessable();
+
+        $finalsSubmission = $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', [
+                ...$sheetData,
+                'period' => 'finals',
+                'student_records' => [[
+                    'id' => 'S-TWO-TERM',
+                    'name' => 'Two Term Student',
+                    'scores' => ['finals' => ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100]],
+                ]],
+            ])
+            ->assertCreated()
+            ->json('grade_sheet');
+
+        $this->assertSame($midtermSubmission['id'], $finalsSubmission['id']);
+        $this->assertSame('92.00', $finalsSubmission['student_records'][0]['midterm']);
+        $this->assertSame('100.00', $finalsSubmission['student_records'][0]['finals']);
+        $this->assertSame('96.80', $finalsSubmission['student_records'][0]['finalGrade']);
+        $this->assertSame('1.25', $finalsSubmission['student_records'][0]['gradePoint']);
+
+        $secondSemester = $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', [
+                ...$sheetData,
+                'semester' => '2nd Semester 2025-2026',
+                'period' => 'both',
+                'student_records' => [[
+                    'id' => 'S-TWO-TERM',
+                    'name' => 'Two Term Student',
+                    'scores' => ['midterm' => $termScores, 'finals' => $termScores],
+                ]],
+            ])
+            ->assertCreated()
+            ->json('grade_sheet');
+
+        $this->assertNotSame($finalsSubmission['id'], $secondSemester['id']);
+        $this->assertSame('2nd Semester 2025-2026', $secondSemester['semester']);
+        $this->assertDatabaseCount('grade_sheets', 2);
+    }
+
+    public function test_student_receives_only_scheduled_courses_they_are_enrolled_in(): void
+    {
+        $registrar = User::factory()->create(['role' => 'registrar']);
+        $professor = User::factory()->create(['role' => 'professor']);
+        $student = User::factory()->create([
+            'role' => 'student',
+            'student_id' => 'S-ENROLLED-001',
+            'api_token' => 'student-enrollment-schedules-token',
+        ]);
+        $otherStudent = User::factory()->create(['role' => 'student', 'student_id' => 'S-OTHER-002']);
+
+        $ownSheet = GradeSheet::create([
+            'code' => 'OWN101', 'subject' => 'Own Course', 'section' => 'BSIT - 1A',
+            'semester' => '1st Semester', 'students' => 1, 'units' => 3,
+            'submitted' => now()->toDateString(), 'status' => 'Approved', 'professor_id' => $professor->id,
+        ]);
+        $ownSheet->studentsList()->create(['student_id' => $student->student_id, 'name' => $student->name]);
+
+        $otherSheet = GradeSheet::create([
+            'code' => 'OTHER101', 'subject' => 'Other Course', 'section' => 'BSIT - 1B',
+            'semester' => '1st Semester', 'students' => 1, 'units' => 3,
+            'submitted' => now()->toDateString(), 'status' => 'Approved', 'professor_id' => $professor->id,
+        ]);
+        $otherSheet->studentsList()->create(['student_id' => $otherStudent->student_id, 'name' => $otherStudent->name]);
+
+        GradeSchedule::create([
+            'school_year' => '2025-2026', 'semester' => '1st Semester', 'year_level' => '1st Year',
+            'courses' => ['sheet:' . $ownSheet->id, 'sheet:' . $otherSheet->id],
+            'status' => 'Scheduled', 'created_by' => $registrar->id,
+        ]);
+        GradeSchedule::create([
+            'school_year' => '2025-2026', 'semester' => '1st Semester', 'year_level' => 'Grade Period',
+            'courses' => [], 'status' => 'Released', 'midterm_opens' => now()->addDay()->toDateString(), 'created_by' => $registrar->id,
+        ]);
+
+        $this->withToken($student->api_token)
+            ->getJson('/api/grade-schedules')
+            ->assertOk()
+            ->assertJsonCount(2, 'schedules')
+            ->assertJsonFragment(['yearLevel' => 'Grade Period', 'courses' => []])
+            ->assertJsonFragment(['midtermOpens' => now()->addDay()->toDateString()])
+            ->assertJsonFragment(['courses' => ['sheet:' . $ownSheet->id]])
+            ->assertJsonMissing(['courses' => ['sheet:' . $otherSheet->id]]);
+    }
+
+    public function test_published_grade_lookup_supports_student_records_keyed_by_username(): void
+    {
+        $professor = User::factory()->create(['role' => 'professor']);
+        $student = User::factory()->create([
+            'role' => 'student',
+            'student_id' => 'S-MOTHER-001',
+            'username' => 'mother-user-001',
+            'api_token' => 'mother-student-token',
+        ]);
+        $sheet = GradeSheet::create([
+            'code' => 'MOTHER101',
+            'subject' => 'Mother System Course',
+            'section' => 'BSIT - 1A',
+            'semester' => '1st Semester 2025-2026',
+            'students' => 1,
+            'units' => 3,
+            'submitted' => now()->toDateString(),
+            'status' => 'Published',
+            'professor_id' => $professor->id,
+        ]);
+        $sheet->studentsList()->create([
+            'student_id' => $student->username,
+            'name' => $student->name,
+            'midterm' => '88',
+            'finals' => '91',
+            'final_grade' => '90',
+            'grade_point' => '1.50',
+            'remarks' => 'PASSED',
+        ]);
+
+        $this->withToken($student->api_token)
+            ->getJson('/api/published-grades')
+            ->assertOk()
+            ->assertJsonPath('grade_sheets.0.student_records.0.id', $student->username)
+            ->assertJsonPath('grade_sheets.0.student_records.0.finalGrade', '90');
+    }
+
     public function test_registrar_cannot_publish_incomplete_grades(): void
     {
         $registrar = User::factory()->create(['role' => 'registrar']);
@@ -152,6 +373,46 @@ class GradeReleaseVisibilityTest extends TestCase
 
         $this->assertSame(422, $response->getStatusCode());
         $this->assertSame('Approved', $sheet->fresh()->status);
+    }
+
+    public function test_registrar_can_return_incomplete_approved_sheet_but_not_complete_approved_sheet(): void
+    {
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'registrar-recovery-token']);
+        $professor = User::factory()->create(['role' => 'professor']);
+        $incompleteSheet = GradeSheet::create([
+            'code' => 'RECOVER101', 'subject' => 'Recovery Subject', 'section' => 'BSIT - 1A',
+            'semester' => '1st Semester', 'students' => 1, 'units' => 3,
+            'submitted' => now()->toDateString(), 'status' => 'Approved', 'professor_id' => $professor->id,
+        ]);
+        $incompleteSheet->studentsList()->create([
+            'student_id' => 'S-RECOVER', 'name' => 'Recovery Student', 'midterm' => '',
+            'finals' => '90', 'final_grade' => '90', 'grade_point' => '1.50',
+        ]);
+        $completeSheet = GradeSheet::create([
+            'code' => 'COMPLETE101', 'subject' => 'Complete Subject', 'section' => 'BSIT - 1A',
+            'semester' => '1st Semester', 'students' => 1, 'units' => 3,
+            'submitted' => now()->toDateString(), 'status' => 'Approved', 'professor_id' => $professor->id,
+        ]);
+        $completeSheet->studentsList()->create([
+            'student_id' => 'S-COMPLETE', 'name' => 'Complete Student', 'midterm' => '90',
+            'finals' => '90', 'final_grade' => '90', 'grade_point' => '1.50',
+        ]);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-sheets/' . $incompleteSheet->id . '/status', [
+                'status' => 'Submitted', 'rejection_reason' => 'Please complete the midterm grade.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('grade_sheet.status', 'Submitted')
+            ->assertJsonPath('grade_sheet.rejection_reason', 'Please complete the midterm grade.');
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-sheets/' . $completeSheet->id . '/status', [
+                'status' => 'Submitted', 'rejection_reason' => 'Return this grade.',
+            ])
+            ->assertUnprocessable();
+
+        $this->assertSame('Approved', $completeSheet->fresh()->status);
     }
 
     public function test_incomplete_published_grades_are_returned_and_hidden_from_student(): void
@@ -189,8 +450,9 @@ class GradeReleaseVisibilityTest extends TestCase
 
     public function test_schedule_release_publishes_only_complete_approved_grade_sheets(): void
     {
-        $registrar = User::factory()->create(['role' => 'registrar']);
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'schedule-registrar-token']);
         $professor = User::factory()->create(['role' => 'professor']);
+        $student = User::factory()->create(['role' => 'student', 'student_id' => 'S-COMPLETE', 'api_token' => 'schedule-student-token']);
 
         $completeSheet = GradeSheet::create([
             'code' => 'COMPLETE101',
@@ -241,12 +503,17 @@ class GradeReleaseVisibilityTest extends TestCase
             'created_by' => $registrar->id,
         ]);
 
-        $request = Request::create('/api/grade-schedules/' . $schedule->id . '/release', 'PATCH');
-        $request->attributes->set('auth_user', $registrar);
-
-        (new GradeScheduleController())->release($request, $schedule);
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-schedules/' . $schedule->id . '/release')
+            ->assertOk()
+            ->assertJsonPath('schedule.status', 'Released');
 
         $this->assertSame('Published', $completeSheet->fresh()->status);
         $this->assertSame('Approved', $incompleteSheet->fresh()->status);
+
+        $this->withToken($student->api_token)
+            ->getJson('/api/published-grades')
+            ->assertOk()
+            ->assertJsonPath('grade_sheets.0.code', 'COMPLETE101');
     }
 }

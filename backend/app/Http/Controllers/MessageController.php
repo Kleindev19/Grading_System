@@ -34,7 +34,10 @@ class MessageController extends Controller
             'professor_id' => ['nullable', 'integer', 'exists:users,id'],
             'grade_sheet_id' => ['nullable', 'integer', 'exists:grade_sheets,id'],
             'body' => ['nullable', 'string', 'max:5000'],
-            'attachment' => ['nullable', 'image', 'max:5120'],
+            'attachment' => ['nullable', 'image', 'max:1024'],
+        ], [
+            'attachment.max' => 'Images must be 1 MB or smaller to prevent upload errors.',
+            'attachment.image' => 'The attachment must be a valid image file.',
         ]);
         abort_if(blank($data['body'] ?? null) && !$request->hasFile('attachment'), 422, 'Message or photo is required.');
 

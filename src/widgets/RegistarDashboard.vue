@@ -453,7 +453,7 @@
             </table>
 
             <div class="modal-actions">
-              <button class="approve-button" type="button" :disabled="reviewSheet.status !== 'Submitted'" @click="changeStatus('Approved')">
+              <button class="approve-button" type="button" :disabled="reviewSheet.status !== 'Submitted' || reviewHasIncompleteGrades" :title="reviewHasIncompleteGrades ? 'Approval is available after Midterm, Finals, and Final Grade are complete for every student.' : 'Approve complete grades'" @click="changeStatus('Approved')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
                   <path d="m14 15 2 2 5-6" />
@@ -461,7 +461,7 @@
                 </svg>
                 Approve Grades
               </button>
-              <button class="reject-button" type="button" :disabled="reviewSheet.status !== 'Submitted'" :title="reviewSheet.status !== 'Submitted' ? 'Only submitted grades can be rejected.' : 'Reject and return to professor'" @click="changeStatus('Submitted')">
+              <button class="reject-button" type="button" :disabled="reviewSheet.status !== 'Submitted' && !(reviewSheet.status === 'Approved' && reviewHasIncompleteGrades)" :title="reviewSheet.status === 'Approved' && reviewHasIncompleteGrades ? 'Return this incomplete sheet to the professor.' : reviewSheet.status !== 'Submitted' ? 'Only submitted or incomplete approved grades can be returned.' : 'Reject and return to professor'" @click="changeStatus('Submitted')">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <circle cx="12" cy="12" r="9" />
                   <path d="m15 9-6 6M9 9l6 6" />
@@ -557,6 +557,9 @@ const instituteGradeSheets = computed(() => gradeSheets.value.filter(sheet => !s
 const publishedCount = computed(() => instituteGradeSheets.value.filter(sheet => sheet.status === 'Published').length)
 const approvedGradeSheets = computed(() => instituteGradeSheets.value.filter(sheet => sheet.status === 'Approved' && sheet.id))
 const reviewStudents = computed(() => reviewSheet.value?.student_records || [])
+const reviewHasIncompleteGrades = computed(() => reviewStudents.value.length === 0 || reviewStudents.value.some(student =>
+  ![student.midterm, student.finals, student.finalGrade, student.gradePoint].every(value => String(value ?? '').trim() !== ''),
+))
 const students = ref([])
 const professors = ref([])
 const professorSearch = ref('')
@@ -780,8 +783,13 @@ async function changeStatus(status) {
     return
   }
 
+  const rejectionReason = status === 'Submitted'
+    ? window.prompt('Enter the reason for returning this grade sheet to the professor:')
+    : undefined
+  if (status === 'Submitted' && (rejectionReason === null || !rejectionReason.trim())) return
+
   try {
-    const updated = await updateGradeSheetStatus(reviewSheet.value.id, status)
+    const updated = await updateGradeSheetStatus(reviewSheet.value.id, status, rejectionReason?.trim())
     const index = gradeSheets.value.findIndex(sheet => sheet.id === updated.id)
     if (index !== -1) gradeSheets.value[index] = updated
     reviewSheet.value = updated

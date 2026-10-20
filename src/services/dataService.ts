@@ -26,6 +26,7 @@ export interface GradeSheet {
   units?: number
   submitted: string
   status: 'Submitted' | 'Approved' | 'Published'
+  rejection_reason?: string | null
   student_records?: StudentRecord[]
 }
 
@@ -37,7 +38,10 @@ export interface StudentRecord {
   finalGrade?: string
   gradePoint?: string
   remarks?: string
-  scores?: Record<string, string>
+  scores?: Record<string, string | number | null> | {
+    midterm: Record<string, string | number | null>
+    finals: Record<string, string | number | null>
+  }
 }
 
 export interface GradeSchedule {
@@ -113,8 +117,10 @@ function authHeaders(): HeadersInit {
 }
 
 export function apiUrl(path: string): string {
-  const baseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '')
-  return `${baseUrl}/api${path}`
+  const configuredBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
+  const apiBase = configuredBase.endsWith('/api') ? configuredBase : `${configuredBase}/api`
+  const apiPath = path.startsWith('/') ? path : `/${path}`
+  return `${apiBase}${apiPath}`
 }
 
 export async function parseApiResponse<T>(response: Response): Promise<T> {
@@ -148,18 +154,18 @@ export async function getGradeSheets(): Promise<GradeSheet[]> {
   return payload.grade_sheets
 }
 
-export async function submitGradeSheet(sheet: GradeSheet, studentRecords: StudentRecord[] = []): Promise<GradeSheet> {
+export async function submitGradeSheet(sheet: GradeSheet, studentRecords: StudentRecord[] = [], period: 'midterm' | 'finals' | 'both' = 'both'): Promise<GradeSheet> {
   const payload = await apiRequest<{ grade_sheet: GradeSheet }>('/grade-sheets', {
     method: 'POST',
-    body: JSON.stringify({ ...sheet, student_records: studentRecords }),
+    body: JSON.stringify({ ...sheet, period, student_records: studentRecords }),
   })
   return payload.grade_sheet
 }
 
-export async function updateGradeSheetStatus(id: number, status: GradeSheet['status']): Promise<GradeSheet> {
+export async function updateGradeSheetStatus(id: number, status: GradeSheet['status'], rejectionReason?: string): Promise<GradeSheet> {
   const payload = await apiRequest<{ grade_sheet: GradeSheet }>(`/grade-sheets/${id}/status`, {
     method: 'PATCH',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, rejection_reason: rejectionReason }),
   })
   return payload.grade_sheet
 }
@@ -222,6 +228,14 @@ export interface MessageRecord {
   readAt?: string | null
 }
 
+export const MAX_MESSAGE_ATTACHMENT_BYTES = 1024 * 1024
+
+export function getMessageAttachmentError(file: File): string | null {
+  if (!file.type.startsWith('image/')) return 'Only image files can be attached.'
+  if (file.size > MAX_MESSAGE_ATTACHMENT_BYTES) return 'Images must be 1 MB or smaller to prevent upload errors.'
+  return null
+}
+
 export interface MessageThread {
   key: string
   studentId: number
@@ -239,6 +253,11 @@ export async function getMessages(): Promise<MessageRecord[]> {
 }
 
 export async function sendMessage(message: { professorId?: number; studentId?: number; gradeSheetId?: number; body?: string; attachment?: File }): Promise<MessageRecord> {
+  if (message.attachment) {
+    const attachmentError = getMessageAttachmentError(message.attachment)
+    if (attachmentError) throw new Error(attachmentError)
+  }
+
   const body = new FormData()
   if (message.professorId) body.append('professor_id', String(message.professorId))
   if (message.studentId) body.append('student_id', String(message.studentId))

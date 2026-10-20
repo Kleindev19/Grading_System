@@ -10,6 +10,7 @@ const devRole = ref<'student' | 'professor' | 'registrar' | null>(null)
 const devLoading = ref(false)
 const devError = ref('')
 const devUser = ref<Record<string, unknown> | null>(null)
+const showDevAccess = ref(false)
 const devCredentials = {
   student: { username: '23-00001', password: 'Password123!' },
   professor: { username: 'mock.professor', password: 'Password123!' },
@@ -51,8 +52,20 @@ function closeDevDashboard() {
   <RegistarDashboard v-else-if="devRole === 'registrar' && devUser" :user="devUser" @signout="closeDevDashboard" />
   <div v-else class="app-shell">
     <HelloWorld />
-    <aside class="dev-access" aria-label="Demo role access">
-      <strong>DEMO ACCESS</strong>
+    <button
+      v-if="!showDevAccess"
+      class="dev-access-toggle"
+      type="button"
+      :aria-expanded="showDevAccess"
+      @click="showDevAccess = true"
+    >
+      Demo Access
+    </button>
+    <aside v-else class="dev-access" aria-label="Demo role access">
+      <div class="dev-access-heading">
+        <strong>DEMO ACCESS</strong>
+        <button class="dev-access-minimize" type="button" aria-label="Minimize demo access" @click="showDevAccess = false">Minimize</button>
+      </div>
       <span>Open the system by role without manual login</span>
       <span v-if="devError" class="dev-error" role="alert">{{ devError }}</span>
       <button type="button" :disabled="devLoading" @click="openDevDashboard('student')">Student</button>
@@ -65,6 +78,25 @@ function closeDevDashboard() {
 <style scoped>
 .app-shell {
   min-height: 100vh;
+}
+
+.dev-access-toggle {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 100;
+  padding: 9px 12px;
+  border: 1px solid #e0b34d;
+  border-radius: 999px;
+  background: #fff9e8;
+  box-shadow: 0 4px 14px #0002;
+  color: #49380e;
+  cursor: pointer;
+  font: 700 12px Arial, sans-serif;
+}
+
+.dev-access-toggle:hover {
+  background: #fff0bd;
 }
 
 .dev-access {
@@ -84,9 +116,26 @@ function closeDevDashboard() {
   font: 13px Arial, sans-serif;
 }
 
+.dev-access-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .dev-access strong {
   font-size: 12px;
   letter-spacing: 0.08em;
+}
+
+.dev-access-minimize {
+  padding: 4px 7px;
+  border: 1px solid #b88720;
+  border-radius: 5px;
+  background: #fff;
+  color: #49380e;
+  cursor: pointer;
+  font: 12px Arial, sans-serif;
 }
 
 .dev-access span {

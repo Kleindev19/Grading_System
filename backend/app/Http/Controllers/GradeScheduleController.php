@@ -11,9 +11,37 @@ class GradeScheduleController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        abort_unless(in_array($request->attributes->get('auth_user')->role, ['registrar', 'professor', 'student'], true), 403);
+        $user = $request->attributes->get('auth_user');
+        abort_unless(in_array($user->role, ['registrar', 'professor', 'student'], true), 403);
 
-        return response()->json(['schedules' => GradeSchedule::latest()->get()->map(fn (GradeSchedule $schedule) => $this->serialize($schedule))]);
+        $schedules = GradeSchedule::latest()->get();
+        if ($user->role === 'student') {
+            $studentIds = collect([$user->student_id, $user->username])->filter()->unique()->values();
+            $gradePeriods = $schedules->filter(fn (GradeSchedule $schedule): bool => $schedule->year_level === 'Grade Period');
+            $courseSchedules = $schedules->filter(fn (GradeSchedule $schedule): bool => $schedule->year_level !== 'Grade Period')
+                ->map(function (GradeSchedule $schedule) use ($studentIds): GradeSchedule {
+                    $courses = collect($schedule->courses ?? [])->filter(function (string $course) use ($studentIds): bool {
+                        $sheetId = str_starts_with($course, 'sheet:') ? (int) substr($course, 6) : null;
+                        $query = GradeSheet::query();
+                        if ($sheetId) {
+                            $query->whereKey($sheetId);
+                        } else {
+                            $query->where('code', $course);
+                        }
+
+                        return $query->whereHas('studentsList', fn ($students) => $students->whereIn('student_id', $studentIds))->exists();
+                    })->values();
+
+                    $schedule->setAttribute('courses', $courses->all());
+
+                    return $schedule;
+                })
+                ->filter(fn (GradeSchedule $schedule): bool => count($schedule->courses ?? []) > 0)
+                ->values();
+            $schedules = $courseSchedules->concat($gradePeriods)->sortByDesc('created_at')->values();
+        }
+
+        return response()->json(['schedules' => $schedules->map(fn (GradeSchedule $schedule) => $this->serialize($schedule))]);
     }
 
     public function store(Request $request): JsonResponse
