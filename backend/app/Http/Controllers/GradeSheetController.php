@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeSheet;
+use App\Services\GradeScheduleReleaser;
 use App\Services\GradingCalculator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -216,6 +217,7 @@ class GradeSheetController extends Controller
         $user = $request->attributes->get('auth_user');
         abort_unless($user->role === 'student', 403, 'Only students can view published grades.');
 
+        app(GradeScheduleReleaser::class)->releaseDueSchedules();
         $this->returnIncompleteSheetsToProfessor();
 
         $studentIds = collect([$user->student_id, $user->username])->filter()->unique()->values();

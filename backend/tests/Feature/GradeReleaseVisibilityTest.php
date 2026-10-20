@@ -448,6 +448,51 @@ class GradeReleaseVisibilityTest extends TestCase
         $this->assertSame('Submitted', $sheet->fresh()->status);
     }
 
+    public function test_due_schedule_publishes_approved_grades_when_a_student_checks_them(): void
+    {
+        $registrar = User::factory()->create(['role' => 'registrar']);
+        $professor = User::factory()->create(['role' => 'professor']);
+        $student = User::factory()->create(['role' => 'student', 'student_id' => 'S-DUE', 'api_token' => 'due-student-token']);
+
+        $sheet = GradeSheet::create([
+            'code' => 'DUE101',
+            'subject' => 'Due Subject',
+            'section' => 'BSIT - 1A',
+            'semester' => '1st Semester',
+            'students' => 1,
+            'units' => 3,
+            'submitted' => now()->toDateString(),
+            'status' => 'Approved',
+            'professor_id' => $professor->id,
+        ]);
+        $sheet->studentsList()->create([
+            'student_id' => 'S-DUE',
+            'name' => 'Due Student',
+            'midterm' => '85',
+            'finals' => '90',
+            'final_grade' => '88',
+            'grade_point' => '1.50',
+        ]);
+
+        $schedule = GradeSchedule::create([
+            'school_year' => '2025-2026',
+            'semester' => '1st Semester',
+            'year_level' => '1st Year',
+            'courses' => ['sheet:' . $sheet->id],
+            'released_date' => now()->subDay()->toDateString(),
+            'status' => 'Scheduled',
+            'created_by' => $registrar->id,
+        ]);
+
+        $this->withToken($student->api_token)
+            ->getJson('/api/published-grades')
+            ->assertOk()
+            ->assertJsonPath('grade_sheets.0.code', 'DUE101');
+
+        $this->assertSame('Released', $schedule->fresh()->status);
+        $this->assertSame('Published', $sheet->fresh()->status);
+    }
+
     public function test_schedule_release_publishes_only_complete_approved_grade_sheets(): void
     {
         $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'schedule-registrar-token']);

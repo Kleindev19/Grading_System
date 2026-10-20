@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\GradeSchedule;
 use App\Models\GradeSheet;
+use App\Services\GradeScheduleReleaser;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,6 +15,7 @@ class GradeScheduleController extends Controller
         $user = $request->attributes->get('auth_user');
         abort_unless(in_array($user->role, ['registrar', 'professor', 'student'], true), 403);
 
+        app(GradeScheduleReleaser::class)->releaseDueSchedules();
         $schedules = GradeSchedule::latest()->get();
         if ($user->role === 'student') {
             $studentIds = collect([$user->student_id, $user->username])->filter()->unique()->values();
@@ -76,50 +78,9 @@ class GradeScheduleController extends Controller
         abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can release schedules.');
         abort_if($schedule->released_date?->isFuture(), 422, 'This release is scheduled for a future date.');
 
-        $schedule->forceFill(['status' => 'Released', 'released_date' => $schedule->released_date ?: now()->toDateString()])->save();
+        $releasedSchedule = app(GradeScheduleReleaser::class)->release($schedule);
 
-        $sheetIds = collect($schedule->courses ?? [])
-            ->filter(fn (string $course): bool => str_starts_with($course, 'sheet:'))
-            ->map(fn (string $course): int => (int) str_replace('sheet:', '', $course))
-            ->filter()
-            ->values();
-
-        if ($sheetIds->isNotEmpty()) {
-            $this->completeApprovedSheets(GradeSheet::query())
-                ->whereIn('id', $sheetIds)
-                ->update(['status' => 'Published']);
-        } else {
-            $courseCodes = collect($schedule->courses ?? [])
-                ->filter(fn (string $course): bool => !str_starts_with($course, 'sheet:'))
-                ->values();
-
-            if ($courseCodes->isNotEmpty()) {
-                $semesterPrefix = str_ireplace('semester', 'sem', $schedule->semester);
-                $this->completeApprovedSheets(GradeSheet::query())
-                    ->where(function ($query) use ($schedule, $semesterPrefix) {
-                        $query->where('semester', $schedule->semester)
-                            ->orWhere('semester', 'like', $schedule->semester . '%')
-                            ->orWhere('semester', 'like', $semesterPrefix . '%');
-                    })
-                    ->whereIn('code', $courseCodes)
-                    ->update(['status' => 'Published']);
-            }
-        }
-
-        return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
-    }
-
-    private function completeApprovedSheets($query)
-    {
-        return $query
-            ->where('status', 'Approved')
-            ->whereHas('studentsList')
-            ->whereDoesntHave('studentsList', function ($studentQuery): void {
-                $studentQuery->whereNull('midterm')->orWhere('midterm', '')
-                    ->orWhereNull('finals')->orWhere('finals', '')
-                    ->orWhereNull('final_grade')->orWhere('final_grade', '')
-                    ->orWhereNull('grade_point')->orWhere('grade_point', '');
-            });
+        return response()->json(['schedule' => $this->serialize($releasedSchedule)]);
     }
 
     public function storePeriod(Request $request): JsonResponse

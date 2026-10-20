@@ -229,7 +229,7 @@
                     <select v-model="scheduleDraft(group).semester" aria-label="Semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select>
                     <select v-model="scheduleDraft(group).yearLevel" aria-label="Year Level"><option>Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select>
                     <input v-model="scheduleDraft(group).releasedDate" type="date" aria-label="Released Date" required />
-                    <button class="add-release-button pending-release-button" type="submit" :disabled="!canReleaseGroup(group)">+ Add Schedule</button>
+                    <button class="add-release-button pending-release-button" type="submit" :disabled="!canReleaseGroup(group)">Submit Schedule</button>
                   </form>
                 </article>
                 <p v-if="pendingScheduleGroups.length === 0" class="release-empty">No approved sections waiting for a schedule.</p>
@@ -2053,7 +2053,7 @@ async function saveGradePeriod() {
 .pending-schedule-card form {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -2068,8 +2068,9 @@ async function saveGradePeriod() {
 }
 
 .pending-schedule-card .add-release-button {
+  grid-column: 1 / -1;
   margin: 0;
-  white-space: nowrap;
+  min-height: 36px;
 }
 
 .pending-schedule-card .add-release-button:disabled {
