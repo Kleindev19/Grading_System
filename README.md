@@ -1,64 +1,175 @@
 # Grading System
 
-Vue 3 and Laravel grading system with registrar, professor, and student workflows.
+A Vue 3 and Laravel application for the complete Professor → Registrar → Student grade workflow. This guide covers the grading features and data flow. Account screens are outside this workflow.
 
-## Stack
+## System at a glance
 
-- Frontend: Vue 3, TypeScript, Vite
-- Backend: Laravel 13, PHP 8.3+
-- Database: SQLite for tests; MySQL or MariaDB for local/deployed data
+1. Registrar configures Midterm and Finals dates and the final-grade submission deadline for each semester.
+2. Professor opens an assigned course, sets its assessment criteria, and enters student scores. Draft scores and assessment columns are saved so work can be resumed.
+3. Professor checks the calculated grades and submits the grade sheet for Registrar review.
+4. Registrar reviews submissions, approves complete sheets, or returns a sheet with a reason. Approved sheets are linked to a release schedule.
+5. When the scheduled release date arrives, complete approved grades are published. Students can view their own published grades and academic summary.
 
-## Local Setup
+Dates and deadlines use Asia/Manila time. A grade period must be configured and open before professors can enter or submit that period. A future release remains scheduled; the Registrar may release it once its date arrives. Due schedules are also processed when grade schedules or published grades are requested, so this workflow does not depend on a separate cron job.
 
-1. Install frontend dependencies from the repository root:
+## Features and functions
 
-   ```powershell
-   npm install
-   ```
+### Professor
 
-2. Configure the Laravel backend:
+Class roster - Browse assigned courses grouped by institute and year level; search by student name or ID and filter by section or year.
 
-   ```powershell
-   cd backend
-   composer install
-   Copy-Item .env.example .env
-   php artisan key:generate
-   php artisan migrate
-   ```
+Course grade sheet - Open a course and see its enrolled students, student IDs, section, and semester.
 
-3. Configure database values in `backend/.env`. For local MySQL, set `DB_CONNECTION=mysql`, `DB_DATABASE`, `DB_USERNAME`, and `DB_PASSWORD`.
+Midterm and Finals entry - Switch between grading periods, enter individual assessment scores, and see the calculated period grade.
 
-4. Optionally load demo data for testing:
+Assessment management - Add Quiz, Lab, Recitation, Assignment, or Major Exam columns; create custom assessments; remove or restore columns. Custom columns can be assigned a category or configured as a separate category.
 
-   ```powershell
-   php artisan db:seed
-   ```
+Per-course grading criteria - View or edit each period's category weights and maximum scores. Criteria are saved for that course and semester, and each period must total 100%.
 
-5. Start the application from two terminals:
+Automatic draft saving - Score edits and assessment-column changes are saved as a course draft. Reopening the course restores the draft; successful grade-sheet submission clears it.
 
-   ```powershell
-   cd backend
-   php artisan serve --host=127.0.0.1 --port=8000
-   ```
+Grade calculation - See Midterm, Finals, final grade, and equivalent grade calculated from score entries and criteria.
 
-   ```powershell
-   npm run dev -- --host 127.0.0.1 --port 5173
-   ```
+Period availability - See opening dates and lock reasons. Inputs and submissions are blocked while a period is locked, before its opening date, or after the applicable submission deadline.
 
-   Open `http://127.0.0.1:5173/`.
+Final Grade export - Select Export to Excel to download a real .xlsx file for the selected course. It contains student IDs and names, Midterm, Finals, final grade, equivalent grade, and a filterable header row. Export is an explicit download action, not an automatic Excel file saved on every score edit.
 
-## Validation
+Submit to Registrar - Review the final-grade sheet and confirm submission. The backend recalculates authoritative grade results and marks the sheet Submitted.
+
+### Registrar
+
+Institute grade management - Choose IBE, ICS, or ITE and manage that institute's grade sheets and professor listings.
+
+Approval dashboard - View submission status and count summaries and a calendar showing scheduled release dates.
+
+Search and filter submissions - Search by class, professor, or section; filter by Submitted, Approved, or Published; browse by academic year.
+
+Grade review - Inspect a sheet's student scores, computed grades, and remarks.
+
+Approve or return - Approve only complete sheets. Return a submission to the professor with a required reason when changes are needed. A published sheet cannot be returned.
+
+Release scheduling - See approved sections awaiting release; choose school year, semester, year level, and release date; review existing schedules and status; manually release a due schedule.
+
+Grade period setup - Create one schedule per semester and configure Midterm opening, Finals opening, and final-grade submission deadline in stages.
+
+Period controls - Mark Midterm or Finals complete to lock that stage and unlock the next setup step; reopen a completed stage when correction or resubmission is needed. Relevant date fields lock after completion.
+
+Academic-year safeguards - Enforce semester and year ordering; require prior academic periods to be completed before moving forward; prevent editing or deleting completed past periods after their deadline.
+
+Student repository - Search students by name or ID; filter by institute, course, year level, section, and last-name group; inspect student profile, status, and published grades by semester. The authenticated API also supports adding student records.
+
+Professor repository - Search and view professor records and their institute or department association.
+
+### Student
+
+Semester selector - Choose an available semester and academic year. A term without an opening date or whose opening date is in the future is marked locked and its grades are unavailable.
+
+Academic summary - View General Weighted Average, enrolled-subject count, student status, and total units for the selected semester.
+
+Published-grade table - View subject code and name, professor, Midterm (40%), Finals (60%), final average, grade point, and remarks.
+
+My Subjects shortcut - Jump to the published subject list.
+
+Privacy boundary - The API returns only the signed-in student's records and only from grade sheets with Published status.
+
+Automatic refresh - The dashboard refreshes grade and schedule data periodically so newly released grades can appear without manually reloading the page.
+
+## Grade rules and status flow
+
+### Default category weights
+
+| Assessment category | Midterm | Finals |
+| --- | ---: | ---: |
+| Quiz | 15% | 15% |
+| Lab | 25% | 5% |
+| Recitation | 10% | 20% |
+| Assignment | 10% | 20% |
+| Major Exam | 40% | 40% |
+| Total | 100% | 100% |
+
+Professors may customize weights per course and semester and create custom categories. Each period's weights must total 100%; configured maximum scores must be greater than 0 and no more than 100; entered scores must be within the configured maximum and 100. Scores within a category are averaged as percentages, then weighted to calculate that period's grade.
+
+Final grade = Midterm × 40% + Finals × 60%. The grading service derives the final grade, grade point, and pass/fail remark; grade summaries sent by a client are not the authoritative calculation.
+
+Normal review flow: Submitted → Approved → Published. A Registrar may return a submission to Submitted with a reason when allowed by the completeness and status rules. Approval and publication require Midterm, Finals, final grade, and grade point for every student in the sheet. Scheduled releases publish only complete, approved sheets selected by that schedule.
+
+## Connection and data flow
+
+The frontend calls the Laravel JSON API. Laravel validates roles and data, stores course criteria, drafts, grade sheets, and schedules, calculates grades, and filters published records by student identity. The Mother System is not directly connected, and its external API and authentication details have not been supplied. For handoff, the integration team must provide an adapter that maps its authenticated user, roles, student IDs, course offerings, enrollment, and semester data to this app's API contract. There is no direct database sharing.
+
+Local development - Keep VITE_API_URL blank; Vite proxies /api to http://127.0.0.1:8000.
+
+Integrated deployment - Set VITE_API_URL to the adapter or API origin, with or without a trailing /api.
+
+Credentials - Keep external-system secrets server-side. Do not put them in frontend environment variables.
+
+Data mapping - Use stable student identifiers consistently for enrollment, grade-sheet records, schedules, and published results. Identify a course offering by code, section, semester, and school year; use sheet:<id> for exact release-schedule targeting when needed.
+
+API contract - Full endpoint list, field names, response shapes, role access, and mapping requirements are in [the Mother System integration contract](docs/mother-system-integration.md).
+
+### API areas used by the workflows
+
+| API area | What it connects |
+| --- | --- |
+| /api/grade-sheets | Professor submissions and Registrar grade-sheet queue and review |
+| /api/grade-criteria | Per-professor, course, and semester assessment criteria |
+| /api/grade-drafts | Saved score entries and assessment headers |
+| /api/grade-schedules | Registrar release schedules and due publication |
+| /api/grade-periods | Semester opening dates, deadline, completion, and reopening |
+| /api/students, /api/professors | Registrar repositories and professor roster data |
+| /api/published-grades | Student-scoped published grade results |
+
+## Technology
+
+Frontend - Vue 3, TypeScript, and Vite; ExcelJS generates .xlsx exports.
+
+Backend - Laravel 13, PHP 8.3+, and a JSON REST API.
+
+Database - Configure via Laravel environment settings. SQLite is used for automated tests; MySQL or MariaDB may be used for local or deployed data.
+
+Dates - Asia/Manila system timezone.
+
+## Run locally
+
+Requirements - Node.js, PHP, Composer, and a Laravel-supported database.
+
+From the repository root:
+
+```powershell
+npm install
+```
+
+In a backend terminal:
+
+```powershell
+cd backend
+composer install
+Copy-Item .env.example .env
+php artisan key:generate
+php artisan migrate
+php artisan serve --host=127.0.0.1 --port=8000
+```
+
+In a second terminal at the repository root:
+
+```powershell
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Open http://127.0.0.1:5173/. Set database and mail configuration in backend/.env. To load demo data, run php artisan db:seed from backend.
+
+## Verify changes
+
+From the repository root:
 
 ```powershell
 npm run build
-cd backend
+```
+
+From backend:
+
+```powershell
 php artisan test
 ```
 
-The frontend uses the Vite `/api` proxy locally. For a deployed frontend, set `VITE_API_URL` to the public Laravel backend URL using the root `.env.example` as a reference.
-
-## Mother System Integration
-
-The app is prepared to connect through a Mother System adapter, but it does not currently call or sync with the Mother System directly. The adapter must expose the canonical API contract documented in [`docs/mother-system-integration.md`](docs/mother-system-integration.md). Configure `VITE_API_URL` to the adapter/backend origin or to its `/api` base URL. Keep the Mother System's field names and authentication behind that adapter so the role dashboards and grading workflows continue to use the app's stable contract.
-
-Do not commit `.env`, database credentials, mail credentials, or uploaded storage files.
+Never commit .env files, database credentials, or uploaded storage files.

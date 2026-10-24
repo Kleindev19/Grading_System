@@ -142,7 +142,7 @@
                   <strong>{{ day.date }}</strong>
                 </span>
               </div>
-              <b class="calendar-month">SEPTEMBER</b>
+              <b class="calendar-month">{{ calendarMonth }}</b>
             </article>
           </div>
 
@@ -282,24 +282,23 @@
             <h3 class="period-title">Grade Period Setting</h3>
             <div class="period-content">
               <form class="period-form" @submit.prevent="saveGradePeriod">
-                <p class="period-form-title">&#128197; Set Grade Period</p>
+                <p class="period-form-title">&#128197; {{ editingPeriodId ? 'Edit Grade Period' : 'Set Grade Period' }}</p>
                 <div class="period-fields">
-                  <label>School Year<input v-model="periodForm.schoolYear" type="text" /></label>
-                  <label>Semester<select v-model="periodForm.semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select></label>
-                  <label>Midterm Open<input v-model="periodForm.midtermOpens" type="date" required /></label>
-                  <label>Midterm Deadline<input v-model="periodForm.midtermDeadline" type="date" required /></label>
-                  <label>Finals Open<input v-model="periodForm.finalsOpens" type="date" required /></label>
-                  <label>Finals Deadline<input v-model="periodForm.finalsDeadline" type="date" required /></label>
-                  <button class="save-period-button" type="submit">&#128190; {{ editingPeriodId ? 'Update Grade Period' : 'Save Grade Period' }}</button>
+                  <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (previous 2nd Semester Finals not locked)' }}</option></select></div>
+                  <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="isGradePeriodTaken('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="isGradePeriodTaken('2nd Semester') || !canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (complete 1st Semester first)' }}</option></select></div>
+                  <div class="period-date-field"><label for="midterm-opens">Midterm Open</label><span class="period-date-control"><input id="midterm-opens" v-model="periodForm.midtermOpens" type="date" :disabled="Boolean(editingPeriodId && isMidtermDateLocked)" required /></span></div>
+                  <div class="period-date-field" :class="{ 'period-field-locked': !editingGradePeriod?.midtermLocked }"><label for="finals-opens">Finals Open</label><small v-if="!editingGradePeriod?.midtermLocked">Available after Midterm is locked.</small><span class="period-date-control"><input id="finals-opens" v-model="periodForm.finalsOpens" type="date" :min="periodForm.midtermOpens" :disabled="!editingGradePeriod?.midtermLocked || isFinalsDateLocked" :required="Boolean(editingGradePeriod?.midtermLocked)" /><button v-if="editingGradePeriod?.midtermLocked && periodForm.finalsOpens" type="button" class="complete-period-button" :aria-label="editingGradePeriod.finalsLocked ? 'Unlock Finals' : 'Lock Finals'" :title="editingGradePeriod.finalsLocked ? 'Unlock Finals for grading' : 'Mark Finals complete and lock its date'" :disabled="!editingGradePeriod.finalsLocked && (!isPeriodOpen(periodForm.finalsOpens) || isGradePeriodReadOnly(editingGradePeriod))" @click="setGradePeriodLock(editingGradePeriod, 'finals', editingGradePeriod.finalsLocked ? 'unlock' : 'lock')"><span class="lock-checkbox" :class="{ checked: editingGradePeriod.finalsLocked }" aria-hidden="true"><span v-if="editingGradePeriod.finalsLocked">&#10003;</span></span></button></span></div>
+                  <div class="period-date-field"><label for="submit-grade-deadline">Submit of Grade Deadline</label><small v-if="editingGradePeriod && (!editingGradePeriod.midtermLocked || !editingGradePeriod.finalsLocked)">Available while Midterm or Finals is unlocked.</small><input id="submit-grade-deadline" v-model="periodForm.submitGradeDeadline" type="date" :min="periodForm.finalsOpens || periodForm.midtermOpens" :disabled="!editingGradePeriod || isSubmitGradeDeadlineLocked" :required="Boolean(editingGradePeriod?.midtermLocked)" /></div>
+                  <button class="save-period-button" type="submit"><span v-if="!editingPeriodId" aria-hidden="true">&#128190;</span>{{ editingPeriodId ? 'Update Grade' : 'Save Grade Period' }}</button>
                 </div>
               </form>
               <section class="active-schedules">
                 <h4>Active Schedules</h4>
                 <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
-                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm: {{ period.midtermOpens || '-' }} to {{ period.midtermDeadline || '-' }} &nbsp;|&nbsp; Finals: {{ period.finalsOpens || '-' }} to {{ period.finalsDeadline || '-' }}</small></div>
-                  <span class="period-state" :class="{ locked: periodState(period, 'midterm') === 'Closed' }">Midterm {{ periodState(period, 'midterm') }}</span>
-                  <span class="period-state" :class="{ locked: periodState(period, 'finals') === 'Closed' }">Finals {{ periodState(period, 'finals') }}</span>
-                  <div class="period-actions"><button type="button" class="edit-period-button" @click="editGradePeriod(period)">Edit</button><button type="button" class="remove-period-button" @click="removeGradePeriod(period)">Remove</button></div>
+                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm opens: {{ period.midtermOpens || '-' }} &nbsp;|&nbsp; Finals opens: {{ period.finalsOpens || '-' }} &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
+                  <div class="period-stage-status"><button v-if="period.midtermLocked" type="button" class="complete-period-button" title="Unlock Midterm" aria-label="Unlock Midterm" @click="setGradePeriodLock(period, 'midterm', 'unlock')"><span class="lock-checkbox checked" aria-hidden="true">&#10003;</span><span>Midterm Locked</span></button><button v-else-if="period.midtermOpens" type="button" class="complete-period-button" title="Lock Midterm" aria-label="Lock Midterm" :disabled="!isPeriodOpen(period.midtermOpens) || isGradePeriodReadOnly(period)" @click="setGradePeriodLock(period, 'midterm', 'lock')"><span class="lock-checkbox" aria-hidden="true"></span><span>Lock Midterm</span></button><span class="period-state" :class="{ locked: periodState(period, 'midterm') !== 'Open' }">Midterm {{ periodState(period, 'midterm') }}</span></div>
+                  <div class="period-stage-status"><button v-if="period.finalsLocked" type="button" class="complete-period-button" title="Unlock Finals" aria-label="Unlock Finals" @click="setGradePeriodLock(period, 'finals', 'unlock')"><span class="lock-checkbox checked" aria-hidden="true">&#10003;</span><span>Finals Locked</span></button><button v-else-if="period.finalsOpens" type="button" class="complete-period-button" title="Lock Finals" aria-label="Lock Finals" :disabled="!isPeriodOpen(period.finalsOpens) || isGradePeriodReadOnly(period)" @click="setGradePeriodLock(period, 'finals', 'lock')"><span class="lock-checkbox" aria-hidden="true"></span><span>Lock Finals</span></button><span class="period-state" :class="{ locked: periodState(period, 'finals') !== 'Open' }">Finals {{ periodState(period, 'finals') }}</span></div>
+                  <div class="period-actions"><button type="button" class="edit-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Edit grade period'" @click="editGradePeriod(period)">Edit</button><button type="button" class="remove-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Remove grade period'" @click="removeGradePeriod(period)">Remove</button></div>
                 </div>
                 <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
               </section>
@@ -473,12 +472,14 @@
         </div>
       </section>
     </div>
+    <Teleport to="body"><div v-if="completionConfirmation" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeCompletionConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="period-lock-confirmation-title"><h2 id="period-lock-confirmation-title">Are you sure you want to {{ completionConfirmation.action }}?</h2><p>{{ completionConfirmation.action === 'unlock' ? 'This will reopen' : 'This will lock' }} {{ completionConfirmation.type === 'midterm' ? 'Midterm' : 'Finals' }} for {{ completionConfirmation.period.semester }}, A.Y. {{ completionConfirmation.period.schoolYear }}. The other grading period will not change. Unlocking either period reopens the Submit of Grade Deadline.</p><p v-if="completionError" class="submission-confirmation-error" role="alert">{{ completionError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isCompletingPeriod" @click="closeCompletionConfirmation">Go Back</button><button type="button" :disabled="isCompletingPeriod" @click="confirmCompleteGradePeriod">{{ isCompletingPeriod ? (completionConfirmation.action === 'unlock' ? 'Unlocking...' : 'Locking...') : (completionConfirmation.action === 'unlock' ? 'Unlock the ' : 'Lock the ') + (completionConfirmation.type === 'midterm' ? 'Midterm' : 'Finals') }}</button></div></section></div></Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { completeGradePeriod as completeGradePeriodRequest, createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, reopenGradePeriod as reopenGradePeriodRequest, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { formatSystemDate, getSystemDateParts, getSystemDateString, getSystemDayStart, parseSystemDate } from '../services/systemTime'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import ibeLogo from '../logo/ibe-logo.png'
 import icsLogo from '../logo/ics-logo.png'
@@ -494,26 +495,50 @@ const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
 const activeTab = ref('approval')
 const currentTime = ref(Date.now())
+const initialSystemYear = getSystemDateParts(currentTime.value).year
 const calendarOpen = ref(false)
 const showAddProfessorNotice = ref(false)
 const expandedYears = ref(['1st Year'])
 const scheduleDrafts = reactive({})
 const releaseForm = ref({
-  schoolYear: '2025-2026',
+  schoolYear: `${initialSystemYear}-${initialSystemYear + 1}`,
   semester: 'Semester',
   yearLevel: 'Year',
   releasedDate: '',
 })
-const expandedReleaseYears = ref(['A.Y 2025 - 2026'])
+const expandedReleaseYears = ref([`A.Y ${initialSystemYear} - ${initialSystemYear + 1}`])
 const periodForm = ref({
-  schoolYear: '2025-2026',
+  schoolYear: `${initialSystemYear}-${initialSystemYear + 1}`,
   semester: 'Semester',
   midtermOpens: '',
-  midtermDeadline: '',
   finalsOpens: '',
-  finalsDeadline: '',
+  submitGradeDeadline: '',
 })
 const editingPeriodId = ref(null)
+const completionConfirmation = ref(null)
+const completionError = ref('')
+const isCompletingPeriod = ref(false)
+const currentAcademicYear = computed(() => {
+  const year = getSystemDateParts(currentTime.value).year
+  return `${year}-${year + 1}`
+})
+const gradePeriodSchoolYearOptions = computed(() => {
+  const startYear = Number(currentAcademicYear.value.slice(0, 4))
+  return Array.from({ length: 5 }, (_, index) => `${startYear + index}-${startYear + index + 1}`)
+})
+const editingGradePeriod = computed(() => gradePeriods.value.find(item => item.id === editingPeriodId.value))
+const isMidtermDateLocked = computed(() => {
+  const period = editingGradePeriod.value
+  return Boolean(period && (period.midtermLocked || isGradePeriodReadOnly(period)))
+})
+const isFinalsDateLocked = computed(() => {
+  const period = editingGradePeriod.value
+  return Boolean(period && (period.finalsLocked || isGradePeriodReadOnly(period)))
+})
+const isSubmitGradeDeadlineLocked = computed(() => {
+  const period = editingGradePeriod.value
+  return Boolean(period && isGradePeriodReadOnly(period))
+})
 const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
 const instituteLogos = { ibe: ibeLogo, ics: icsLogo, ite: iteLogo }
 const institutes = getInstitutes().map(institute => ({ ...institute, logo: instituteLogos[institute.id] }))
@@ -609,7 +634,7 @@ const selectedRepositoryStudent = computed(() => students.value.find(student => 
 function isReleaseAvailable(schedule) {
   if (schedule.status !== 'Scheduled') return false
   if (!schedule.releasedDate) return true
-  return new Date(`${schedule.releasedDate}T00:00:00`).getTime() <= currentTime.value
+  return schedule.releasedDate <= getSystemDateString(currentTime.value)
 }
 
 let releaseClock
@@ -643,15 +668,20 @@ onUnmounted(() => {
 })
 
 const calendarDays = computed(() => {
-  const today = new Date()
-  const start = new Date(today)
-  start.setDate(today.getDate() - ((today.getDay() + 6) % 7))
-  return Array.from({ length: 5 }, (_, index) => {
-    const date = new Date(start)
-    date.setDate(start.getDate() + index)
-    const dateValue = date.toISOString().slice(0, 10)
-    return { label: date.toLocaleDateString('en-US', { weekday: 'short' }), date: date.getDate(), today: dateValue === today.toISOString().slice(0, 10), scheduled: schedules.value.some(schedule => schedule.releasedDate === dateValue) }
+  const todayValue = getSystemDateString(currentTime.value)
+  const today = parseSystemDate(todayValue)
+  if (!today) return []
+  const mondayOffset = (today.getUTCDay() + 6) % 7
+  const monday = today.getTime() - mondayOffset * 24 * 60 * 60 * 1000
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday + index * 24 * 60 * 60 * 1000)
+    const dateValue = `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
+    return { label: formatSystemDate(date, { weekday: 'short' }), date: date.getUTCDate(), today: dateValue === todayValue, scheduled: schedules.value.some(schedule => schedule.releasedDate === dateValue) }
   })
+})
+const calendarMonth = computed(() => {
+  const today = parseSystemDate(getSystemDateString(currentTime.value))
+  return today ? formatSystemDate(today, { month: 'long' }).toUpperCase() : ''
 })
 
 const summaryCards = computed(() => {
@@ -806,7 +836,7 @@ function scheduleCourseLabel(course) {
 
 function scheduleDraft(group) {
   if (!scheduleDrafts[group.key]) {
-    scheduleDrafts[group.key] = { schoolYear: '2025-2026', semester: 'Semester', yearLevel: 'Year', releasedDate: '' }
+    scheduleDrafts[group.key] = { schoolYear: currentAcademicYear.value, semester: 'Semester', yearLevel: 'Year', releasedDate: '' }
   }
   return scheduleDrafts[group.key]
 }
@@ -864,20 +894,111 @@ function releaseNow(schedule) {
 }
 
 function resolveDeadline(dateValue) {
-  if (!dateValue) return null
-  const date = new Date(`${dateValue}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? null : date
+  return parseSystemDate(dateValue)
+}
+
+function startOfCurrentDay() {
+  return getSystemDayStart(currentTime.value)
+}
+
+function isGradePeriodReadOnly(period) {
+  const deadline = resolveDeadline(period.submitGradeDeadline)
+  return Boolean(
+    period.midtermLocked
+      && period.finalsLocked
+      && deadline
+      && deadline.getTime() < startOfCurrentDay(),
+  )
+}
+
+function canCreateGradePeriodInYear(schoolYear) {
+  const startYear = Number(String(schoolYear).match(/^\d{4}/)?.[0])
+  const currentStartYear = Number(currentAcademicYear.value.slice(0, 4))
+  if (!Number.isFinite(startYear) || startYear < currentStartYear) return false
+
+  const previousSchoolYear = `${startYear - 1}-${startYear}`
+  const previousFinalPeriod = gradePeriods.value.find(period =>
+    period.schoolYear === previousSchoolYear && period.semester === '2nd Semester',
+  )
+  if (!previousFinalPeriod) return startYear === currentStartYear
+
+  return Boolean(previousFinalPeriod?.finalsLocked)
 }
 
 function periodState(period, type) {
-  const today = new Date(currentTime.value)
-  today.setHours(0, 0, 0, 0)
+  const isLocked = type === 'midterm' ? period.midtermLocked : period.finalsLocked
+  if (isLocked) return 'Done'
   const opens = resolveDeadline(type === 'midterm' ? period.midtermOpens : period.finalsOpens)
-  const deadline = resolveDeadline(type === 'midterm' ? period.midtermDeadline : period.finalsDeadline)
-  if (!opens || !deadline) return 'Not set'
-  if (today.getTime() < opens.getTime()) return 'Upcoming'
+  if (!opens) return 'Not set'
+  if (startOfCurrentDay() < opens.getTime()) return 'Upcoming'
+  return 'Open'
+}
 
-  return today.getTime() < deadline.getTime() ? 'Open' : 'Closed'
+function isPeriodOpen(dateValue) {
+  const opens = resolveDeadline(dateValue)
+  return Boolean(opens && opens.getTime() <= startOfCurrentDay())
+}
+
+function setGradePeriodLock(period, type, action) {
+  if (!period.id) return
+  if (action === 'lock') {
+    const opens = type === 'midterm' ? period.midtermOpens : period.finalsOpens
+    if (!opens || !isPeriodOpen(opens) || isGradePeriodReadOnly(period)) return
+  }
+  completionError.value = ''
+  completionConfirmation.value = { period, type, action }
+}
+
+function closeCompletionConfirmation() {
+  if (isCompletingPeriod.value) return
+  completionConfirmation.value = null
+  completionError.value = ''
+}
+
+async function confirmCompleteGradePeriod() {
+  const confirmation = completionConfirmation.value
+  if (!confirmation?.period.id || isCompletingPeriod.value) return
+  isCompletingPeriod.value = true
+  try {
+    const updatePeriodRequest = confirmation.action === 'unlock'
+      ? reopenGradePeriodRequest
+      : completeGradePeriodRequest
+    const updated = await updatePeriodRequest(confirmation.period.id, confirmation.type)
+    const index = schedules.value.findIndex(schedule => schedule.id === updated.id)
+    if (index !== -1) schedules.value[index] = updated
+    if (editingPeriodId.value === updated.id) {
+      editingPeriodId.value = updated.id
+      periodForm.value = {
+        schoolYear: updated.schoolYear,
+        semester: updated.semester,
+        midtermOpens: updated.midtermOpens || '',
+        finalsOpens: updated.finalsOpens || '',
+        submitGradeDeadline: updated.submitGradeDeadline || '',
+      }
+    }
+    completionConfirmation.value = null
+  } catch (error) {
+    completionError.value = error instanceof Error ? error.message : 'Unable to update this grading period.'
+  } finally {
+    isCompletingPeriod.value = false
+  }
+}
+
+function isGradePeriodTaken(semester) {
+  return gradePeriods.value.some(period =>
+    period.schoolYear === periodForm.value.schoolYear
+      && period.semester === semester
+      && period.id !== editingPeriodId.value,
+  )
+}
+
+function canCreateGradePeriodSemester(semester) {
+  if (semester !== '2nd Semester') return true
+  const firstSemester = gradePeriods.value.find(period =>
+    period.schoolYear === periodForm.value.schoolYear && period.semester === '1st Semester',
+  )
+  const deadline = resolveDeadline(firstSemester?.submitGradeDeadline)
+  return Boolean(firstSemester?.finalsLocked && deadline && deadline.getTime() < startOfCurrentDay())
 }
 
 function editGradePeriod(period) {
@@ -886,9 +1007,8 @@ function editGradePeriod(period) {
     schoolYear: period.schoolYear,
     semester: period.semester,
     midtermOpens: period.midtermOpens || '',
-    midtermDeadline: period.midtermDeadline || '',
     finalsOpens: period.finalsOpens || '',
-    finalsDeadline: period.finalsDeadline || '',
+    submitGradeDeadline: period.submitGradeDeadline || '',
   }
 }
 
@@ -905,15 +1025,32 @@ async function removeGradePeriod(period) {
 
 async function saveGradePeriod() {
   if (periodForm.value.semester === 'Semester') return
-  const request = editingPeriodId.value
-    ? updateGradePeriod(editingPeriodId.value, periodForm.value)
-    : createGradePeriod(periodForm.value)
-  request.then(schedule => {
+  const editingPeriod = gradePeriods.value.find(period => period.id === editingPeriodId.value)
+  const request = editingPeriod
+    ? { ...periodForm.value, schoolYear: editingPeriod.schoolYear }
+    : {
+        schoolYear: periodForm.value.schoolYear,
+        semester: periodForm.value.semester,
+        midtermOpens: periodForm.value.midtermOpens,
+      }
+  try {
+    const schedule = editingPeriodId.value
+      ? await updateGradePeriod(editingPeriodId.value, request)
+      : await createGradePeriod(request)
     const index = schedules.value.findIndex(item => item.id === schedule.id)
     if (index !== -1) schedules.value[index] = schedule
     else schedules.value.unshift(schedule)
     editingPeriodId.value = null
-  }).catch(error => window.alert(error instanceof Error ? error.message : 'Unable to save grade period.'))
+    periodForm.value = {
+      schoolYear: currentAcademicYear.value,
+      semester: 'Semester',
+      midtermOpens: '',
+      finalsOpens: '',
+      submitGradeDeadline: '',
+    }
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Unable to save grade period.')
+  }
 }
 
 </script>
@@ -1504,8 +1641,8 @@ async function saveGradePeriod() {
 
 .calendar-days {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
 }
 
 .calendar-days span {
@@ -1532,7 +1669,7 @@ async function saveGradePeriod() {
 }
 
 .calendar-days strong {
-  font-size: 20px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -2358,17 +2495,68 @@ async function saveGradePeriod() {
 
 .period-fields {
   display: grid;
-  grid-template-columns: repeat(6, minmax(110px, 1fr)) auto;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 14px;
-  align-items: end;
+  align-items: start;
 }
 
-.period-fields label {
+.period-fields > *,
+.period-date-field,
+.period-date-control {
+  min-width: 0;
+}
+
+.period-control-field {
   display: grid;
-  gap: 5px;
+  grid-template-rows: 18px 34px;
+  align-content: end;
+  gap: 3px;
+  min-width: 0;
+  padding-top: 32px;
+}
+
+.period-control-field > label,
+.period-date-field > label {
+  display: block;
   color: #111111;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+.period-date-field {
+  position: relative;
+  display: grid;
+  grid-template-rows: 18px 34px;
+  align-content: end;
+  gap: 3px;
+  padding-top: 32px;
+}
+
+.period-date-field > small {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0;
+  color: #777777;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 16px;
+}
+
+.period-fields .period-field-locked {
+  color: #777777;
+}
+
+.period-fields .period-field-locked input {
+  background: #eeeeee;
+  color: #888888;
+  cursor: not-allowed;
+}
+
+.period-fields .period-field-locked small {
+  color: #777777;
 }
 
 .period-fields input,
@@ -2382,10 +2570,94 @@ async function saveGradePeriod() {
   color: #555555;
 }
 
+.period-date-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.period-date-control input {
+  flex: 1;
+  width: 100%;
+}
+
+.complete-period-button,
+.period-complete-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #555555;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.complete-period-button {
+  padding: 4px 7px;
+  border: 1px solid #bdbdbd;
+  border-radius: 5px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.complete-period-button:hover:not(:disabled) {
+  background: #f2f2f2;
+}
+
+.complete-period-button:disabled {
+  color: #777777;
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.period-complete-check {
+  color: #2d7b4a;
+}
+
+.lock-checkbox {
+  display: inline-grid;
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  border: 1px solid #8b8b8b;
+  border-radius: 3px;
+  color: transparent;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.lock-checkbox.checked {
+  border-color: #2d7b4a;
+  background: #2d7b4a;
+  color: #ffffff;
+}
+
+.period-stage-status {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
 .save-period-button {
+  align-self: end;
+  grid-column: 6;
+  grid-row: 1;
+  justify-self: stretch;
+  padding-top: 0;
+  width: 100%;
   height: 34px;
-  padding: 0 14px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0 6px;
+  font-size: 13px;
   white-space: nowrap;
+}
+
+.period-fields input[type="date"]::-webkit-datetime-edit-day-field:focus,
+.period-fields input[type="date"]::-webkit-datetime-edit-month-field:focus,
+.period-fields input[type="date"]::-webkit-datetime-edit-year-field:focus {
+  background: transparent;
+  outline: none;
 }
 
 .active-schedules h4 {
@@ -2442,6 +2714,75 @@ async function saveGradePeriod() {
   cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+}
+
+.submission-confirmation-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.submission-confirmation {
+  width: min(396px, calc(100% - 32px));
+  padding: 36px 30px 29px;
+  border: 1px solid #8b9d91;
+  border-radius: 12px;
+  background: repeating-linear-gradient(135deg, #294b38 0, #294b38 14px, #2d523d 14px, #2d523d 28px);
+  box-shadow: 0 4px 14px #0005;
+  color: #ffffff;
+  text-align: center;
+}
+
+.submission-confirmation h2 {
+  margin: 0 0 10px;
+  color: #ffffff;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.submission-confirmation p {
+  margin: 0 auto 12px;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.submission-confirmation .submission-confirmation-error {
+  color: #ffe2df;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.submission-confirmation-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 14px;
+}
+
+.submission-confirmation-actions button {
+  min-width: 118px;
+  min-height: 28px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #eeeeee;
+  color: #111111;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.submission-confirmation-actions button:last-child {
+  background: #a9e2bd;
+}
+
+.submission-confirmation-actions button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .edit-period-button {

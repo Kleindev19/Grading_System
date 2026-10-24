@@ -1,3 +1,5 @@
+import type { GradingCriteria } from './grading'
+
 export interface Subject {
   code: string
   status: 'APPROVED' | 'PENDING'
@@ -30,6 +32,25 @@ export interface GradeSheet {
   student_records?: StudentRecord[]
 }
 
+export interface GradeCriteriaCourse {
+  code: string
+  section: string
+  semester: string
+}
+
+export type AssessmentHeaders = string[] | { midterm: string[]; finals: string[] }
+export interface SavedGradeCriteria {
+  criteria: GradingCriteria | null
+  assessmentHeaders: AssessmentHeaders
+}
+
+export interface GradeDraft {
+  subject: string
+  units: number
+  assessmentHeaders: AssessmentHeaders
+  studentRecords: StudentRecord[]
+}
+
 export interface StudentRecord {
   id: string
   name: string
@@ -53,9 +74,10 @@ export interface GradeSchedule {
   releasedDate?: string
   status: 'Scheduled' | 'Released'
   midtermOpens?: string
-  midtermDeadline?: string
   finalsOpens?: string
-  finalsDeadline?: string
+  submitGradeDeadline?: string
+  midtermLocked: boolean
+  finalsLocked: boolean
 }
 
 export interface Student {
@@ -154,6 +176,62 @@ export async function getGradeSheets(): Promise<GradeSheet[]> {
   return payload.grade_sheets
 }
 
+export async function getGradeCriteria(course: GradeCriteriaCourse): Promise<SavedGradeCriteria> {
+  const query = new URLSearchParams({
+    code: course.code,
+    section: course.section,
+    semester: course.semester,
+  }).toString()
+  const payload = await apiRequest<{ criteria: GradingCriteria | null; assessment_headers: AssessmentHeaders }>(`/grade-criteria?${query}`)
+  return { criteria: payload.criteria, assessmentHeaders: payload.assessment_headers }
+}
+
+export async function saveGradeCriteria(course: GradeCriteriaCourse, criteria: GradingCriteria, assessmentHeaders: AssessmentHeaders): Promise<SavedGradeCriteria> {
+  const payload = await apiRequest<{ criteria: GradingCriteria; assessment_headers: AssessmentHeaders }>('/grade-criteria', {
+    method: 'PUT',
+    body: JSON.stringify({ ...course, criteria, assessment_headers: assessmentHeaders }),
+  })
+  return { criteria: payload.criteria, assessmentHeaders: payload.assessment_headers }
+}
+
+export async function getGradeDraft(course: GradeCriteriaCourse): Promise<GradeDraft | null> {
+  const query = new URLSearchParams({
+    code: course.code,
+    section: course.section,
+    semester: course.semester,
+  }).toString()
+  const payload = await apiRequest<{ draft: { subject: string; units: number; assessment_headers: AssessmentHeaders; student_records: StudentRecord[] } | null }>(`/grade-drafts?${query}`)
+  if (!payload.draft) return null
+  return {
+    subject: payload.draft.subject,
+    units: payload.draft.units,
+    assessmentHeaders: payload.draft.assessment_headers,
+    studentRecords: payload.draft.student_records,
+  }
+}
+
+export async function saveGradeDraft(course: GradeCriteriaCourse, draft: GradeDraft): Promise<void> {
+  await apiRequest<{ message: string }>('/grade-drafts', {
+    method: 'PUT',
+    body: JSON.stringify({
+      ...course,
+      subject: draft.subject,
+      units: draft.units,
+      assessment_headers: draft.assessmentHeaders,
+      student_records: draft.studentRecords,
+    }),
+  })
+}
+
+export async function deleteGradeDraft(course: GradeCriteriaCourse): Promise<void> {
+  const query = new URLSearchParams({
+    code: course.code,
+    section: course.section,
+    semester: course.semester,
+  }).toString()
+  await apiRequest<{ message: string }>(`/grade-drafts?${query}`, { method: 'DELETE' })
+}
+
 export async function submitGradeSheet(sheet: GradeSheet, studentRecords: StudentRecord[] = [], period: 'midterm' | 'finals' | 'both' = 'both'): Promise<GradeSheet> {
   const payload = await apiRequest<{ grade_sheet: GradeSheet }>('/grade-sheets', {
     method: 'POST',
@@ -193,7 +271,7 @@ export async function releaseGradeSchedule(id: number): Promise<GradeSchedule> {
   return payload.schedule
 }
 
-export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens?: string; midtermDeadline?: string; finalsOpens?: string; finalsDeadline?: string }): Promise<GradeSchedule> {
+export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens: string; finalsOpens?: string; submitGradeDeadline?: string }): Promise<GradeSchedule> {
   const payload = await apiRequest<{ schedule: GradeSchedule }>('/grade-periods', {
     method: 'POST',
     body: JSON.stringify(period),
@@ -201,7 +279,7 @@ export async function createGradePeriod(period: { schoolYear: string; semester: 
   return payload.schedule
 }
 
-export async function updateGradePeriod(id: number, period: { schoolYear: string; semester: string; midtermOpens?: string; midtermDeadline?: string; finalsOpens?: string; finalsDeadline?: string }): Promise<GradeSchedule> {
+export async function updateGradePeriod(id: number, period: { schoolYear: string; semester: string; midtermOpens: string; finalsOpens?: string; submitGradeDeadline?: string }): Promise<GradeSchedule> {
   const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(period),
@@ -209,116 +287,24 @@ export async function updateGradePeriod(id: number, period: { schoolYear: string
   return payload.schedule
 }
 
+export async function completeGradePeriod(id: number, period: 'midterm' | 'finals'): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/complete`, {
+    method: 'PATCH',
+    body: JSON.stringify({ period }),
+  })
+  return payload.schedule
+}
+
+export async function reopenGradePeriod(id: number, period: 'midterm' | 'finals'): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/reopen`, {
+    method: 'PATCH',
+    body: JSON.stringify({ period }),
+  })
+  return payload.schedule
+}
+
 export async function deleteGradePeriod(id: number): Promise<void> {
   await apiRequest<{ message: string }>(`/grade-periods/${id}`, { method: 'DELETE' })
-}
-
-export interface MessageRecord {
-  id: number
-  studentId: number
-  studentName?: string
-  studentNumber?: string
-  professorId: number
-  professorName?: string
-  senderId: number
-  body?: string
-  attachmentUrl?: string
-  gradeSheet?: { id: number; code: string; subject: string; section: string } | null
-  createdAt?: string
-  readAt?: string | null
-}
-
-export const MAX_MESSAGE_ATTACHMENT_BYTES = 1024 * 1024
-
-export function getMessageAttachmentError(file: File): string | null {
-  if (!file.type.startsWith('image/')) return 'Only image files can be attached.'
-  if (file.size > MAX_MESSAGE_ATTACHMENT_BYTES) return 'Images must be 1 MB or smaller to prevent upload errors.'
-  return null
-}
-
-export interface MessageThread {
-  key: string
-  studentId: number
-  studentName?: string
-  studentNumber?: string
-  gradeSheetId?: number
-  course: { name: string; section: string }
-  messages: MessageRecord[]
-  unreadCount: number
-}
-
-export async function getMessages(): Promise<MessageRecord[]> {
-  const payload = await apiRequest<{ messages: MessageRecord[] }>('/messages')
-  return payload.messages
-}
-
-export async function sendMessage(message: { professorId?: number; studentId?: number; gradeSheetId?: number; body?: string; attachment?: File }): Promise<MessageRecord> {
-  if (message.attachment) {
-    const attachmentError = getMessageAttachmentError(message.attachment)
-    if (attachmentError) throw new Error(attachmentError)
-  }
-
-  const body = new FormData()
-  if (message.professorId) body.append('professor_id', String(message.professorId))
-  if (message.studentId) body.append('student_id', String(message.studentId))
-  if (message.gradeSheetId) body.append('grade_sheet_id', String(message.gradeSheetId))
-  if (message.body) body.append('body', message.body)
-  if (message.attachment) body.append('attachment', message.attachment)
-  const response = await fetch(apiUrl('/messages'), { method: 'POST', headers: authHeaders(), body })
-  const payload = await parseApiResponse<{ message?: MessageRecord | string; message_error?: string; errors?: Record<string, string[]> }>(response)
-  if (!response.ok) {
-    const validationMessage = Object.values(payload.errors || {}).flat()[0]
-    const serverMessage = typeof payload.message === 'string' ? payload.message : undefined
-    throw new Error(payload.message_error || serverMessage || validationMessage || 'Unable to send message.')
-  }
-  if (!payload.message || typeof payload.message === 'string') throw new Error('The server returned an invalid message response.')
-  return payload.message
-}
-
-export async function deleteMessage(messageId: number): Promise<void> {
-  const response = await fetch(apiUrl(`/messages/${messageId}`), {
-    method: 'DELETE',
-    headers: authHeaders(),
-  })
-  const payload = await parseApiResponse<{ message?: string }>(response)
-  if (!response.ok) throw new Error(payload.message || 'Unable to unsend message.')
-}
-
-export function groupMessages(messages: MessageRecord[]): MessageThread[] {
-  const groups = new Map<string, MessageThread>()
-
-  messages.forEach(message => {
-    const key = `${message.studentId}:${message.professorId || 'general'}`
-    const existing = groups.get(key)
-
-    if (existing) {
-      existing.messages.push(message)
-      if (!existing.gradeSheetId && message.gradeSheet?.id) {
-        existing.gradeSheetId = message.gradeSheet.id
-      }
-      if (!existing.course.name || existing.course.name === 'General Message') {
-        existing.course = { name: message.gradeSheet?.subject || 'General Message', section: message.gradeSheet?.section || '' }
-      }
-      if (!message.readAt && message.senderId !== message.professorId) existing.unreadCount += 1
-      return
-    }
-
-    groups.set(key, {
-      key,
-      studentId: message.studentId,
-      studentName: message.studentName,
-      studentNumber: message.studentNumber,
-      gradeSheetId: message.gradeSheet?.id,
-      course: { name: message.gradeSheet?.subject || 'General Message', section: message.gradeSheet?.section || '' },
-      messages: [message],
-      unreadCount: !message.readAt && message.senderId !== message.professorId ? 1 : 0,
-    })
-  })
-
-  return [...groups.values()].map(thread => ({
-    ...thread,
-    messages: [...thread.messages].sort((left, right) => (left.createdAt || '').localeCompare(right.createdAt || '')),
-  }))
 }
 
 export async function getStudents(): Promise<Student[]> {

@@ -19,6 +19,10 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        $schoolYear = now()->year . '-' . (now()->year + 1);
+        [$schoolYearStart, $schoolYearEnd] = array_map('intval', explode('-', $schoolYear));
+        $nextSchoolYear = ($schoolYearStart + 1) . '-' . ($schoolYearEnd + 1);
+
         $registrar = User::updateOrCreate(
             ['username' => 'mock.registrar'],
             [
@@ -70,7 +74,7 @@ class DatabaseSeeder extends Seeder
             ['code' => 'MOCK101', 'section' => 'BSBA - 1A', 'professor_id' => $professor->id],
             [
                 'subject' => 'Mock Business Law',
-                'semester' => '1st Semester 2025-2026',
+                'semester' => '1st Semester ' . $schoolYear,
                 'students' => 1,
                 'units' => 3,
                 'submitted' => now()->toDateString(),
@@ -105,7 +109,7 @@ class DatabaseSeeder extends Seeder
                 ['code' => $code, 'section' => 'BSBA - 1A', 'professor_id' => $professor->id],
                 [
                     'subject' => 'Mock Business Law - ' . str_replace('MOCK-', '', $code),
-                    'semester' => '1st Semester 2026-2027',
+                    'semester' => '1st Semester ' . $schoolYear,
                     'students' => 1,
                     'units' => 3,
                     'submitted' => now()->toDateString(),
@@ -133,7 +137,7 @@ class DatabaseSeeder extends Seeder
         }
 
         GradeSchedule::updateOrCreate(
-            ['school_year' => '2025-2026', 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
+            ['school_year' => $schoolYear, 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
             [
                 'courses' => ['MOCK101'],
                 'released_date' => now()->toDateString(),
@@ -144,15 +148,13 @@ class DatabaseSeeder extends Seeder
         );
 
         GradeSchedule::updateOrCreate(
-            ['school_year' => '2026-2027', 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
+            ['school_year' => $nextSchoolYear, 'semester' => '1st Semester', 'year_level' => '1st Year', 'created_by' => $registrar->id],
             [
                 'courses' => ['sheet:' . $workflowSheets['MOCK-SCHEDULED']->id],
                 'released_date' => now()->addDay()->toDateString(),
                 'status' => 'Scheduled',
                 'midterm_opens' => null,
-                'midterm_deadline' => null,
                 'finals_opens' => null,
-                'finals_deadline' => null,
             ],
         );
 

@@ -16,6 +16,21 @@ class GradeReleaseVisibilityTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_authenticated_user_response_does_not_expose_api_token(): void
+    {
+        $professor = User::factory()->create([
+            'role' => 'professor',
+            'api_token' => 'private-professor-token',
+        ]);
+
+        $this->withToken($professor->api_token)
+            ->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('user.id', $professor->id)
+            ->assertJsonPath('user.role', 'professor')
+            ->assertJsonMissingPath('user.api_token');
+    }
+
     public function test_student_sees_grade_immediately_after_it_is_published(): void
     {
         $registrarUsername = 'registrar_' . uniqid();
@@ -73,7 +88,7 @@ class GradeReleaseVisibilityTest extends TestCase
             'finals' => '88',
             'final_grade' => '86',
             'grade_point' => '1.25',
-            'remarks' => 'Passed',
+            'remarks' => 'INC',
         ]);
 
         $registrarRequest = new Request();
@@ -94,6 +109,7 @@ class GradeReleaseVisibilityTest extends TestCase
 
         $this->assertNotEmpty($studentPayload['grade_sheets']);
         $this->assertSame('IT101', $studentPayload['grade_sheets'][0]['code']);
+        $this->assertSame('FAILED', $studentPayload['grade_sheets'][0]['student_records'][0]['remarks']);
     }
 
     public function test_professor_cannot_submit_incomplete_grades(): void
@@ -190,6 +206,465 @@ class GradeReleaseVisibilityTest extends TestCase
         $this->assertSame('PASSED', $published[0]['student_records'][0]['remarks']);
     }
 
+    public function test_final_grade_submission_is_allowed_through_its_deadline_and_blocked_after_it(): void
+    {
+        $this->travelTo(now()->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'deadline-registrar-token']);
+        $professor = User::factory()->create(['role' => 'professor', 'api_token' => 'deadline-professor-token']);
+
+        $gradePeriod = GradeSchedule::create([
+            'school_year' => '2025-2026',
+            'semester' => '1st Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'status' => 'Released',
+            'midterm_opens' => now()->subDays(14)->toDateString(),
+            'finals_opens' => now()->subDays(7)->toDateString(),
+            'submit_grade_deadline' => today()->toDateString(),
+            'midterm_locked' => true,
+            'finals_locked' => true,
+            'created_by' => $registrar->id,
+        ]);
+
+        $submission = [
+            'code' => 'DEADLINE101',
+            'subject' => 'Deadline Test',
+            'section' => 'BSIT - 1A',
+            'semester' => '1st Semester 2025-2026',
+            'students' => 1,
+            'units' => 3,
+            'student_records' => [[
+                'id' => 'S-DEADLINE-001',
+                'name' => 'Deadline Student',
+                'scores' => [
+                    'midterm' => ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+                    'finals' => ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+                ],
+            ]],
+        ];
+
+        $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', $submission)
+            ->assertCreated();
+
+        $this->travelTo(now()->addDay());
+
+        $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', $submission)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The final-grade submission deadline has passed.');
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/reopen', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', false)
+            ->assertJsonPath('schedule.finalsLocked', true);
+
+        $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', $submission)
+            ->assertCreated();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/complete', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', true)
+            ->assertJsonPath('schedule.finalsLocked', true);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/reopen', ['period' => 'finals'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', true)
+            ->assertJsonPath('schedule.finalsLocked', false);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/reopen', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', false)
+            ->assertJsonPath('schedule.finalsLocked', false);
+
+        $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', [
+                ...$submission,
+                'period' => 'finals',
+                'student_records' => [[
+                    'id' => 'S-DEADLINE-001',
+                    'name' => 'Deadline Student',
+                    'scores' => ['finals' => $submission['student_records'][0]['scores']['finals']],
+                ]],
+            ])
+            ->assertCreated();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/complete', ['period' => 'finals'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', false)
+            ->assertJsonPath('schedule.finalsLocked', true);
+    }
+
+    public function test_grade_period_uses_a_single_final_grade_submission_deadline(): void
+    {
+        $this->travelTo(now('Asia/Manila')->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'period-registrar-token']);
+        $period = [
+            'schoolYear' => now()->year . '-' . (now()->year + 1),
+            'semester' => '1st Semester',
+            'midtermOpens' => now()->toDateString(),
+        ];
+
+        $created = $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $period)
+            ->assertCreated()
+            ->assertJsonPath('schedule.midtermOpens', $period['midtermOpens'])
+            ->assertJsonPath('schedule.finalsOpens', null)
+            ->assertJsonPath('schedule.submitGradeDeadline', null)
+            ->assertJsonPath('schedule.midtermLocked', false)
+            ->assertJsonPath('schedule.finalsLocked', false)
+            ->assertJsonMissingPath('schedule.midtermDeadline')
+            ->assertJsonMissingPath('schedule.finalsDeadline')
+            ->json('schedule');
+
+        $this->assertDatabaseHas('grade_schedules', [
+            'school_year' => $period['schoolYear'],
+            'semester' => $period['semester'],
+        ]);
+        $this->assertSame(
+            null,
+            GradeSchedule::query()->whereKey($created['id'])->firstOrFail()->submit_grade_deadline?->toDateString(),
+        );
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $created['id'], [
+                ...$period,
+                'finalsOpens' => now()->addWeek()->toDateString(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Mark Midterm complete before setting the Finals opening date.');
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $created['id'] . '/complete', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', true);
+
+        $finalsOpens = now()->addWeek()->toDateString();
+        $updated = $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $created['id'], [
+                ...$period,
+                'finalsOpens' => $finalsOpens,
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.finalsOpens', $finalsOpens)
+            ->json('schedule');
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $period)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', "A Grade Period already exists for 1st Semester, A.Y. {$period['schoolYear']}. Edit the existing schedule instead.");
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', [
+                ...$period,
+                'schoolYear' => (now()->year - 1) . '-' . now()->year,
+                'semester' => '2nd Semester',
+            ])
+            ->assertUnprocessable();
+
+        $deadline = now()->addWeeks(2)->toDateString();
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $updated['id'], [
+                ...$period,
+                'finalsOpens' => $finalsOpens,
+                'submitGradeDeadline' => $deadline,
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.submitGradeDeadline', $deadline);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $updated['id'] . '/complete', ['period' => 'finals'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Finals cannot be completed before it opens.');
+
+        $this->travelTo(now()->addWeek());
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $updated['id'] . '/complete', ['period' => 'finals'])
+            ->assertOk()
+            ->assertJsonPath('schedule.finalsLocked', true);
+
+        $existing = GradeSchedule::query()->where('school_year', $period['schoolYear'])->firstOrFail();
+        $updatedDeadline = now()->addWeeks(3)->toDateString();
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $existing->id, [
+                ...$period,
+                'finalsOpens' => $finalsOpens,
+                'submitGradeDeadline' => $updatedDeadline,
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.submitGradeDeadline', $updatedDeadline);
+    }
+
+    public function test_second_semester_cannot_be_scheduled_until_first_semester_is_complete_and_deadline_passed(): void
+    {
+        $this->travelTo(now('Asia/Manila')->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'second-semester-registrar-token']);
+        $schoolYear = now('Asia/Manila')->year . '-' . (now('Asia/Manila')->year + 1);
+        $firstSemester = GradeSchedule::create([
+            'school_year' => $schoolYear,
+            'semester' => '1st Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'midterm_opens' => now()->subDays(10)->toDateString(),
+            'finals_opens' => now()->subDays(2)->toDateString(),
+            'submit_grade_deadline' => now()->addDay()->toDateString(),
+            'midterm_locked' => true,
+            'status' => 'Released',
+            'created_by' => $registrar->id,
+        ]);
+        $secondSemester = [
+            'schoolYear' => $schoolYear,
+            'semester' => '2nd Semester',
+            'midtermOpens' => now()->toDateString(),
+        ];
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $secondSemester)
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                "The 2nd Semester for A.Y. {$schoolYear} can be scheduled after the 1st Semester Finals are complete and its Submit of Grade Deadline has passed.",
+            );
+
+        $firstSemester->update([
+            'finals_locked' => true,
+            'submit_grade_deadline' => now()->subDay()->toDateString(),
+        ]);
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $secondSemester)
+            ->assertCreated()
+            ->assertJsonPath('schedule.semester', '2nd Semester');
+    }
+
+    public function test_next_school_year_opens_after_previous_second_semester_finals_are_locked(): void
+    {
+        $this->travelTo(now('Asia/Manila')->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'next-year-registrar-token']);
+        $currentYear = now('Asia/Manila')->year;
+        $currentSchoolYear = "{$currentYear}-" . ($currentYear + 1);
+        $nextSchoolYear = ($currentYear + 1) . '-' . ($currentYear + 2);
+        $nextYearPeriod = [
+            'schoolYear' => $nextSchoolYear,
+            'semester' => '1st Semester',
+            'midtermOpens' => now()->toDateString(),
+        ];
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $nextYearPeriod)
+            ->assertUnprocessable()
+            ->assertJsonPath(
+                'message',
+                "The {$nextSchoolYear} school year can be scheduled after Finals for the 2nd Semester of A.Y. {$currentSchoolYear} is marked complete.",
+            );
+
+        GradeSchedule::create([
+            'school_year' => $currentSchoolYear,
+            'semester' => '2nd Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'midterm_opens' => now()->subMonths(2)->toDateString(),
+            'finals_opens' => now()->subMonth()->toDateString(),
+            'submit_grade_deadline' => today()->toDateString(),
+            'midterm_locked' => true,
+            'finals_locked' => true,
+            'status' => 'Released',
+            'created_by' => $registrar->id,
+        ]);
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $nextYearPeriod)
+            ->assertCreated()
+            ->assertJsonPath('schedule.schoolYear', $nextSchoolYear)
+            ->json('schedule');
+
+        $futurePeriod = GradeSchedule::query()->where('school_year', $nextSchoolYear)->firstOrFail()->toArray();
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $futurePeriod['id'] . '/complete', ['period' => 'midterm'])
+            ->assertOk();
+
+        $finalsOpens = today()->toDateString();
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $futurePeriod['id'], [
+                ...$nextYearPeriod,
+                'finalsOpens' => $finalsOpens,
+            ])
+            ->assertOk();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $futurePeriod['id'] . '/complete', ['period' => 'finals'])
+            ->assertOk();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $futurePeriod['id'], [
+                ...$nextYearPeriod,
+                'finalsOpens' => $finalsOpens,
+                'submitGradeDeadline' => now()->addYear()->addMonths(3)->toDateString(),
+            ])
+            ->assertOk();
+    }
+
+    public function test_next_school_year_is_available_as_soon_as_previous_second_semester_finals_are_locked(): void
+    {
+        $this->travelTo(now('Asia/Manila')->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'calendar-year-registrar-token']);
+        $currentYear = now('Asia/Manila')->year;
+        $currentSchoolYear = "{$currentYear}-" . ($currentYear + 1);
+        $nextSchoolYear = ($currentYear + 1) . '-' . ($currentYear + 2);
+        $previousDeadline = now()->addYear()->addDays(2)->toDateString();
+
+        GradeSchedule::create([
+            'school_year' => $currentSchoolYear,
+            'semester' => '2nd Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'midterm_opens' => now()->addMonths(10)->toDateString(),
+            'finals_opens' => now()->addMonths(11)->toDateString(),
+            'submit_grade_deadline' => $previousDeadline,
+            'midterm_locked' => true,
+            'finals_locked' => true,
+            'status' => 'Released',
+            'created_by' => $registrar->id,
+        ]);
+
+        $this->travelTo(now()->addYear());
+        $nextYearPeriod = [
+            'schoolYear' => $nextSchoolYear,
+            'semester' => '1st Semester',
+            'midtermOpens' => now()->addMonth()->toDateString(),
+        ];
+
+        $this->withToken($registrar->api_token)
+            ->postJson('/api/grade-periods', $nextYearPeriod)
+            ->assertCreated()
+            ->assertJsonPath('schedule.schoolYear', $nextSchoolYear);
+    }
+
+    public function test_grade_period_stages_unlock_only_after_registrar_marks_each_period_complete(): void
+    {
+        $this->travelTo(now('Asia/Manila')->setTime(12, 0));
+        $registrar = User::factory()->create(['role' => 'registrar', 'api_token' => 'locked-period-registrar-token']);
+        $period = GradeSchedule::create([
+            'school_year' => now()->year . '-' . (now()->year + 1),
+            'semester' => '1st Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'midterm_opens' => today()->toDateString(),
+            'status' => 'Released',
+            'created_by' => $registrar->id,
+        ]);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id, [
+                'schoolYear' => $period->school_year,
+                'semester' => $period->semester,
+                'midtermOpens' => $period->midterm_opens->toDateString(),
+                'finalsOpens' => today()->toDateString(),
+                'submitGradeDeadline' => today()->toDateString(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Mark Midterm complete before setting the Finals opening date.');
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id . '/complete', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', true);
+
+        $finalsOpen = now()->addDay()->toDateString();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id, [
+                'schoolYear' => $period->school_year,
+                'semester' => $period->semester,
+                'midtermOpens' => $period->midterm_opens->toDateString(),
+                'finalsOpens' => $finalsOpen,
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.finalsOpens', $finalsOpen);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id, [
+                'schoolYear' => $period->school_year,
+                'semester' => $period->semester,
+                'midtermOpens' => $period->midterm_opens->toDateString(),
+                'finalsOpens' => $finalsOpen,
+                'submitGradeDeadline' => now()->addWeeks(2)->toDateString(),
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.submitGradeDeadline', now()->addWeeks(2)->toDateString());
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id . '/complete', ['period' => 'finals'])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Finals cannot be completed before it opens.');
+
+        $this->travelTo(now()->addDay());
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id . '/complete', ['period' => 'finals'])
+            ->assertOk()
+            ->assertJsonPath('schedule.finalsLocked', true);
+
+        $deadline = now()->addDay()->toDateString();
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id, [
+                'schoolYear' => $period->school_year,
+                'semester' => $period->semester,
+                'midtermOpens' => $period->midterm_opens->toDateString(),
+                'finalsOpens' => $finalsOpen,
+                'submitGradeDeadline' => $deadline,
+            ])
+            ->assertOk()
+            ->assertJsonPath('schedule.submitGradeDeadline', $deadline);
+
+        $this->travelTo(now()->addDays(2));
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $period->id, [
+                'schoolYear' => $period->school_year,
+                'semester' => $period->semester,
+                'midtermOpens' => $period->midterm_opens->toDateString(),
+                'finalsOpens' => $finalsOpen,
+                'submitGradeDeadline' => now()->addWeek()->toDateString(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Completed academic years cannot be edited.');
+
+        $this->withToken($registrar->api_token)
+            ->deleteJson('/api/grade-periods/' . $period->id)
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Completed academic years cannot be edited.');
+
+        $historicalPeriod = GradeSchedule::create([
+            'school_year' => (now()->year - 1) . '-' . now()->year,
+            'semester' => '2nd Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'midterm_opens' => now()->subMonths(8)->toDateString(),
+            'finals_opens' => now()->subMonths(6)->toDateString(),
+            'submit_grade_deadline' => now()->subMonths(5)->toDateString(),
+            'midterm_locked' => true,
+            'finals_locked' => true,
+            'status' => 'Released',
+            'created_by' => $registrar->id,
+        ]);
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $historicalPeriod->id, [
+                'schoolYear' => $historicalPeriod->school_year,
+                'semester' => $historicalPeriod->semester,
+                'midtermOpens' => now()->subMonths(7)->toDateString(),
+                'finalsOpens' => $historicalPeriod->finals_opens->toDateString(),
+                'submitGradeDeadline' => $historicalPeriod->submit_grade_deadline->toDateString(),
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'Completed academic years cannot be edited.');
+    }
+
     public function test_midterm_and_finals_can_be_submitted_separately_and_second_semester_stays_separate(): void
     {
         $professor = User::factory()->create(['role' => 'professor', 'api_token' => 'separate-period-professor-token']);
@@ -209,6 +684,18 @@ class GradeReleaseVisibilityTest extends TestCase
             ]],
         ];
 
+        $gradePeriod = GradeSchedule::create([
+            'school_year' => '2025-2026',
+            'semester' => '1st Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'status' => 'Released',
+            'midterm_opens' => now()->subDay()->toDateString(),
+            'finals_opens' => now()->subDay()->toDateString(),
+            'submit_grade_deadline' => now()->addWeek()->toDateString(),
+            'created_by' => $registrar->id,
+        ]);
+
         $midtermSubmission = $this->withToken($professor->api_token)
             ->postJson('/api/grade-sheets', [...$sheetData, 'period' => 'midterm'])
             ->assertCreated()
@@ -221,6 +708,11 @@ class GradeReleaseVisibilityTest extends TestCase
         $this->withToken($registrar->api_token)
             ->patchJson('/api/grade-sheets/' . $midtermSubmission['id'] . '/status', ['status' => 'Approved'])
             ->assertUnprocessable();
+
+        $this->withToken($registrar->api_token)
+            ->patchJson('/api/grade-periods/' . $gradePeriod->id . '/complete', ['period' => 'midterm'])
+            ->assertOk()
+            ->assertJsonPath('schedule.midtermLocked', true);
 
         $finalsSubmission = $this->withToken($professor->api_token)
             ->postJson('/api/grade-sheets', [
@@ -240,6 +732,17 @@ class GradeReleaseVisibilityTest extends TestCase
         $this->assertSame('100.00', $finalsSubmission['student_records'][0]['finals']);
         $this->assertSame('96.80', $finalsSubmission['student_records'][0]['finalGrade']);
         $this->assertSame('1.25', $finalsSubmission['student_records'][0]['gradePoint']);
+
+        GradeSchedule::create([
+            'school_year' => '2025-2026',
+            'semester' => '2nd Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'status' => 'Released',
+            'finals_locked' => true,
+            'submit_grade_deadline' => now()->addDays(7)->toDateString(),
+            'created_by' => $registrar->id,
+        ]);
 
         $secondSemester = $this->withToken($professor->api_token)
             ->postJson('/api/grade-sheets', [

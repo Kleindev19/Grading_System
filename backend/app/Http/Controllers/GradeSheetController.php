@@ -3,6 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeSheet;
+use App\Models\GradeCriteria;
+use App\Models\GradeDraft;
+use App\Models\GradeSchedule;
 use App\Services\GradeScheduleReleaser;
 use App\Services\GradingCalculator;
 use Illuminate\Http\JsonResponse;
@@ -53,6 +56,36 @@ class GradeSheetController extends Controller
         $period = $data['period'] ?? 'both';
         unset($data['period']);
 
+        $hasAcademicYear = $this->normalizeSchoolYear($data['semester']) !== null;
+        $gradePeriod = $hasAcademicYear ? $this->findGradePeriod($data['semester']) : null;
+        if ($hasAcademicYear) {
+            abort_if(!$gradePeriod, 422, 'The Registrar has not set a grade period for this semester.');
+        }
+
+        if ($gradePeriod && $period !== 'both') {
+            $periodLocked = $period === 'midterm' ? $gradePeriod->midterm_locked : $gradePeriod->finals_locked;
+            $opens = $period === 'midterm' ? $gradePeriod->midterm_opens : $gradePeriod->finals_opens;
+            abort_if($periodLocked, 422, 'The Registrar has locked this grading period.');
+            abort_if(!$opens || $opens->toDateString() > now('Asia/Manila')->toDateString(), 422, 'This grading period is not open yet.');
+        }
+
+        if ($period === 'both') {
+            if ($gradePeriod) {
+                abort_if(
+                    !$gradePeriod->submit_grade_deadline,
+                    422,
+                    'The Registrar has not set a final-grade submission deadline for this semester.',
+                );
+                if ($gradePeriod->midterm_locked && $gradePeriod->finals_locked) {
+                    abort_if(
+                        today()->gt($gradePeriod->submit_grade_deadline),
+                        422,
+                        'The final-grade submission deadline has passed.',
+                    );
+                }
+            }
+        }
+
         foreach ($data['student_records'] as $index => $student) {
             foreach ($period === 'both' ? ['midterm', 'finals'] : [$period] as $requiredPeriod) {
                 if (!isset($student['scores'][$requiredPeriod]) || !is_array($student['scores'][$requiredPeriod])) {
@@ -68,18 +101,25 @@ class GradeSheetController extends Controller
         );
 
         $sheetKey = ['code' => $data['code'], 'section' => $data['section'], 'professor_id' => $user->id, 'semester' => $data['semester']];
+        $savedCriteria = GradeCriteria::query()->where([
+            'code' => $data['code'],
+            'section' => $data['section'],
+            'semester' => $data['semester'],
+            'professor_id' => $user->id,
+        ])->first();
+        $criteria = $savedCriteria?->criteria;
         $existingSheet = GradeSheet::where($sheetKey)->with('studentsList')->first();
         $existingRecords = $existingSheet?->studentsList->keyBy('student_id') ?? collect();
         $calculator = app(GradingCalculator::class);
 
-        $records = array_map(function (array $student) use ($existingRecords, $period, $calculator): array {
+        $records = array_map(function (array $student) use ($existingRecords, $period, $calculator, $criteria): array {
             $existing = $existingRecords->get($student['id']);
             $scores = $this->mergePeriodScores($existing?->assessment_scores ?? [], $student['scores'], $period);
             $termGrades = [];
 
             foreach (['midterm', 'finals'] as $term) {
                 try {
-                    $termGrades[$term] = $calculator->calculatePeriod($term, $scores[$term] ?? []);
+                    $termGrades[$term] = $calculator->calculatePeriod($term, $scores[$term] ?? [], $criteria[$term] ?? null);
                 } catch (\InvalidArgumentException $exception) {
                     if ($period === 'both' || $period === $term) {
                         throw ValidationException::withMessages(['student_records' => $exception->getMessage()]);
@@ -112,11 +152,50 @@ class GradeSheetController extends Controller
             );
             $sheet->studentsList()->delete();
             $sheet->studentsList()->createMany($records);
+            GradeDraft::query()->where([
+                'professor_id' => $user->id,
+                'code' => $data['code'],
+                'section' => $data['section'],
+                'semester' => $data['semester'],
+            ])->delete();
 
             return $sheet;
         });
 
         return response()->json(['grade_sheet' => $this->serialize($sheet->load('professor:id,name', 'studentsList'))], 201);
+    }
+
+    private function findGradePeriod(string $semester): ?GradeSchedule
+    {
+        if (!preg_match('/(1st|2nd)\s+semester/i', $semester, $semesterMatch)) {
+            return null;
+        }
+
+        $schoolYear = $this->normalizeSchoolYear($semester);
+        if (!$schoolYear) {
+            return null;
+        }
+
+        $semesterName = strtolower($semesterMatch[1] . ' semester');
+
+        return GradeSchedule::query()
+            ->where('year_level', 'Grade Period')
+            ->get()
+            ->first(fn (GradeSchedule $schedule): bool => strtolower(trim($schedule->semester)) === $semesterName
+                && $this->normalizeSchoolYear($schedule->school_year) === $schoolYear);
+    }
+
+    private function normalizeSchoolYear(string $value): ?string
+    {
+        if (!preg_match('/(\d{4})\s*[-\/]\s*(\d{2,4})/', $value, $matches)) {
+            return null;
+        }
+
+        $endYear = strlen($matches[2]) === 2
+            ? substr($matches[1], 0, 2) . $matches[2]
+            : $matches[2];
+
+        return $matches[1] . '-' . $endYear;
     }
 
     private function mergePeriodScores(array $existingScores, array $submittedScores, string $period): array
@@ -298,7 +377,7 @@ class GradeSheetController extends Controller
                 'finals' => $student->finals ?? '',
                 'finalGrade' => $student->final_grade ?? '',
                 'gradePoint' => $student->grade_point ?? '',
-                'remarks' => $student->remarks ?? '',
+                'remarks' => strtoupper(trim((string) $student->remarks)) === 'INC' ? 'FAILED' : ($student->remarks ?? ''),
                 'scores' => $student->assessment_scores ?? [],
             ])->values(),
         ];

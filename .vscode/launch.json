@@ -1,0 +1,18 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Start Frontend + Backend",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://127.0.0.1:5173/",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "dev: all",
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}

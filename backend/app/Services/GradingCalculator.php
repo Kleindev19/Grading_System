@@ -45,7 +45,7 @@ class GradingCalculator
             $roundedGrade >= 81 => [2.50, 'PASSED'],
             $roundedGrade >= 78 => [2.75, 'PASSED'],
             $roundedGrade >= 75 => [3.00, 'PASSED'],
-            $roundedGrade >= 70 => [4.00, 'INC'],
+            $roundedGrade >= 70 => [4.00, 'FAILED'],
             default => [5.00, 'FAILED'],
         };
 
@@ -58,16 +58,16 @@ class GradingCalculator
         ];
     }
 
-    public function calculatePeriod(string $period, array $scores): float
+    public function calculatePeriod(string $period, array $scores, ?array $criteria = null): float
     {
         if (!isset(self::WEIGHTS[$period])) {
             throw new InvalidArgumentException("Unknown grading period: {$period}.");
         }
 
-        return $this->calculateTerm($scores, self::WEIGHTS[$period]);
+        return $this->calculateTerm($scores, self::WEIGHTS[$period], $criteria);
     }
 
-    private function calculateTerm(array $scores, array $weights): float
+    private function calculateTerm(array $scores, array $weights, ?array $criteria = null): float
     {
         $prefixes = [
             'quiz' => ['Q'],
@@ -76,26 +76,72 @@ class GradingCalculator
             'assignment' => ['A'],
             'major_exam' => ['Mid Ex'],
         ];
-        $termGrade = 0.0;
+        $usingDefaultCriteria = $criteria === null;
+        if ($usingDefaultCriteria) {
+            $criteria = array_map(
+                fn (int|float $weight): array => ['weight' => $weight, 'maxScore' => 100],
+                $weights,
+            );
+        }
 
-        foreach ($weights as $category => $weight) {
-            $categoryScores = [];
-            foreach ($scores as $label => $score) {
-                foreach ($prefixes[$category] as $prefix) {
-                    if (str_starts_with((string) $label, $prefix) && $score !== null && $score !== '') {
-                        $categoryScores[] = (float) $score;
-                        break;
-                    }
+        $criterionScores = [];
+        foreach ($scores as $label => $score) {
+            $key = $this->criterionKey((string) $label, $prefixes);
+            if ($key !== null) {
+                $criterionScores[$key][] = $score === null || $score === '' ? null : (float) $score;
+            }
+        }
+
+        if ($usingDefaultCriteria) {
+            foreach (array_keys($weights) as $category) {
+                if (!isset($criterionScores[$category]) || in_array(null, $criterionScores[$category], true)) {
+                    throw new InvalidArgumentException("A score is required for the {$category} category.");
                 }
             }
+        }
 
-            if ($categoryScores === []) {
+        $activeCriteria = array_intersect_key($criteria, $criterionScores);
+        $weightTotal = array_sum(array_map(fn (array $criterion): float => (float) $criterion['weight'], $activeCriteria));
+        if ($activeCriteria === [] || abs($weightTotal - 100) > 0.001) {
+            throw new InvalidArgumentException('Grading criteria percentages must total 100%.');
+        }
+
+        $termGrade = 0.0;
+
+        foreach ($activeCriteria as $category => $criterion) {
+            $categoryScores = $criterionScores[$category] ?? [];
+            if ($categoryScores === [] || in_array(null, $categoryScores, true)) {
                 throw new InvalidArgumentException("A score is required for the {$category} category.");
             }
 
-            $termGrade += (array_sum($categoryScores) / count($categoryScores)) * ($weight / 100);
+            $maxScore = (float) $criterion['maxScore'];
+            if ($maxScore <= 0 || $maxScore > 100 || max($categoryScores) > $maxScore || max($categoryScores) > 100) {
+                throw new InvalidArgumentException("Scores for the {$category} category exceed its maximum score.");
+            }
+            $averagePercent = (array_sum($categoryScores) / count($categoryScores) / $maxScore) * 100;
+            $termGrade += $averagePercent * ((float) $criterion['weight'] / 100);
         }
 
         return round($termGrade, 2);
+    }
+
+    private function criterionKey(string $label, array $prefixes): ?string
+    {
+        if (preg_match('/^(?:Mid Ex|[QLAR])\d+:\s*(.+)$/i', $label, $matches) === 1) {
+            $name = mb_strtolower(trim($matches[1]));
+            $name = preg_replace('/\s+/', '_', $name);
+
+            return 'custom:' . $name;
+        }
+
+        foreach ($prefixes as $category => $categoryPrefixes) {
+            foreach ($categoryPrefixes as $prefix) {
+                if (str_starts_with($label, $prefix)) {
+                    return $category;
+                }
+            }
+        }
+
+        return null;
     }
 }

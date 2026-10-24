@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "backend: serve",
+      "type": "shell",
+      "command": "if (Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue) { Write-Output 'Laravel is already running on 127.0.0.1:8000.' } else { & 'C:\\php-8.5.7\\php.exe' artisan serve --host=127.0.0.1 --port=8000 }",
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "problemMatcher": {
+        "owner": "laravel",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Server running on",
+          "endsPattern": "Press Ctrl\\+C to stop|Laravel is already running on 127\\.0\\.0\\.1:8000\\."
+        }
+      }
+    },
+    {
+      "label": "vite: dev",
+      "type": "shell",
+      "command": "if (Get-NetTCPConnection -LocalAddress 127.0.0.1 -LocalPort 5173 -State Listen -ErrorAction SilentlyContinue) { Write-Output 'Vite is already running on 127.0.0.1:5173.' } else { npm run dev -- --host 127.0.0.1 --port 5173 --strictPort }",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "presentation": {
+        "reveal": "never",
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "VITE v",
+          "endsPattern": "Local:|Vite is already running on 127\\.0\\.0\\.1:5173\\."
+        }
+      }
+    },
+    {
+      "label": "dev: all",
+      "dependsOn": [
+        "backend: serve",
+        "vite: dev"
+      ],
+      "dependsOrder": "parallel"
+    }
+  ]
+}
