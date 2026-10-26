@@ -173,6 +173,7 @@ class DemoAccountsSeederTest extends TestCase
     public function test_known_vercel_origins_remain_in_the_default_cors_allowlist(): void
     {
         $this->assertContains('https://gradingsystem05.vercel.app', config('cors.allowed_origins'));
+        $this->assertContains('https://grading-system-gamma-six.vercel.app', config('cors.allowed_origins'));
         $this->assertContains(
         'https://grading-system-cdm-kleins-projects-246b3510.vercel.app',
         config('cors.allowed_origins'),

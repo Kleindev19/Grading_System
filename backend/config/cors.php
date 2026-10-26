@@ -8,6 +8,7 @@ return [
             'http://localhost:5173',
             'http://127.0.0.1:5173',
             'https://gradingsystem05.vercel.app',
+            'https://grading-system-gamma-six.vercel.app',
             'https://grading-system-cdm-kleins-projects-246b3510.vercel.app',
         ],
         array_map(

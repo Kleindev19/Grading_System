@@ -194,7 +194,7 @@ The Render web service must use the repository's `backend/Dockerfile` (the `back
 APP_ENV=production
 APP_DEBUG=false
 APP_KEY=<a generated Laravel application key>
-CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app,https://grading-system-cdm-kleins-projects-246b3510.vercel.app
+CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app,https://grading-system-gamma-six.vercel.app,https://grading-system-cdm-kleins-projects-246b3510.vercel.app
 ```
 
 On each container start, the Dockerfile runs migrations and seeds the verified demo accounts. Seeding is limited to this demo Docker service; the seeder is disabled by default when run manually in production. The seeder preserves an existing complete demo workflow rather than resetting its statuses on each restart.
