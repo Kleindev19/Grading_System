@@ -170,6 +170,15 @@ class DemoAccountsSeederTest extends TestCase
             ->assertHeader('access-control-allow-origin', 'https://gradingsystem05.vercel.app');
     }
 
+    public function test_known_vercel_origins_remain_in_the_default_cors_allowlist(): void
+    {
+        $this->assertContains('https://gradingsystem05.vercel.app', config('cors.allowed_origins'));
+        $this->assertContains(
+        'https://grading-system-cdm-kleins-projects-246b3510.vercel.app',
+        config('cors.allowed_origins'),
+        );
+    }
+
     public function test_demo_accounts_seeding_is_disabled_in_production_by_default(): void
     {
         config()->set('app.env', 'production');
