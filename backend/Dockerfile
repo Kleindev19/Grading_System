@@ -14,6 +14,7 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public
 ENV DB_CONNECTION=sqlite
 ENV DB_DATABASE=/var/www/html/database/database.sqlite
+ENV SEED_DEMO_ACCOUNTS=true
 ENV SESSION_DRIVER=file
 ENV CACHE_STORE=file
 ENV QUEUE_CONNECTION=sync
@@ -43,4 +44,4 @@ RUN test -f vendor/autoload.php
 
 EXPOSE 80
 
-CMD ["sh", "-c", "php artisan migrate --force && exec apache2-foreground"]
+CMD ["sh", "-c", "php artisan migrate --force && if [ \"$SEED_DEMO_ACCOUNTS\" = \"true\" ]; then php artisan db:seed --class=DemoAccountsSeeder --force; fi && exec apache2-foreground"]
