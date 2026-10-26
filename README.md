@@ -182,7 +182,7 @@ Never commit .env files, database credentials, or uploaded storage files.
 
 ## Deploy Vercel frontend with Render API
 
-Vercel hosts the Vue frontend; the Laravel API runs separately on Render. The production Vite build uses `https://grading-system-urtn.onrender.com` from the tracked `.env.production` file. If the Render service changes, update that file and redeploy Vercel.
+Vercel hosts the Vue frontend; the Laravel API runs separately on Render. Production builds use `https://grading-system-urtn.onrender.com` from `.env.production` and fall back to that API if `VITE_API_URL` is unset. Local development continues to use the `/api` proxy. If the Render service changes, update `.env.production` and redeploy Vercel.
 
 The Render backend currently uses SQLite in the container. This is suitable only for a disposable demo: Render's free service filesystem is ephemeral, so accounts and grades can be lost when the service restarts or redeploys. Do not store real student records in this demo service.
 
@@ -203,7 +203,7 @@ Confirm that `https://grading-system-urtn.onrender.com/up` reports **Application
 
 ### 2. Deploy the Vercel frontend
 
-The `.env.production` file sets:
+The `.env.production` file sets the production API base URL:
 
 ```text
 VITE_API_URL=https://grading-system-urtn.onrender.com
@@ -225,4 +225,4 @@ These public demo credentials must never be reused for real accounts or real stu
 
 ### 4. Verify login
 
-Open the Vercel site after its latest deployment and try each Demo Access role. A Render `422` with **Invalid username or password** means the demo seeder did not run; check `SEED_DEMO_ACCOUNTS=true` and the Render deployment logs. A browser **Failed to fetch** message means CORS or Render availability; check `CORS_ALLOWED_ORIGINS` and the `/up` health page. A `404` at the Vercel site's `/api/login` means the browser is still running an old frontend deployment.
+Open the Vercel site after its latest deployment and try each Demo Access role. A Render `422` with **Invalid username or password** means the demo seeder did not run; check the Render deployment logs. A browser **Failed to fetch** message can mean CORS or Render availability; check `CORS_ALLOWED_ORIGINS` and the `/up` health page. A request to the Vercel site's `/api/login` means the browser is still running an old frontend deployment; redeploy Vercel and hard-refresh the site.
