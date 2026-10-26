@@ -156,7 +156,13 @@ In a second terminal at the repository root:
 npm run dev -- --host 127.0.0.1 --port 5173
 ```
 
-Open http://127.0.0.1:5173/. Set database and mail configuration in backend/.env. To load demo data, run php artisan db:seed from backend.
+Open http://127.0.0.1:5173/. Set database and mail configuration in backend/.env. To seed the local SQLite database with the demo users, roster, grade sheets in Submitted/Approved/Published states, an active grade period, and release schedules, run this from `backend`:
+
+```powershell
+php artisan db:seed --class=DemoAccountsSeeder
+```
+
+This seeds only the database configured by the local `backend/.env`; it does not change Vercel or Render configuration. Demo logins for local testing: student `23-00001`, professor `mock.professor`, and registrar `mock.registrar`. All use `Password123!`.
 
 ## Verify changes
 
@@ -188,7 +194,7 @@ The Render web service must use the repository's `backend/Dockerfile` (the `back
 APP_ENV=production
 APP_DEBUG=false
 APP_KEY=<a generated Laravel application key>
-CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app
+CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app,https://grading-system-cdm-kleins-projects-246b3510.vercel.app
 SEED_DEMO_ACCOUNTS=true
 ```
 
