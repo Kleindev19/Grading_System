@@ -17,9 +17,12 @@ RUN sed -ri 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' \
     /etc/apache2/apache2.conf \
     /etc/apache2/conf-available/*.conf
 
+
 WORKDIR /var/www/html
 
 COPY . .
+
+RUN composer install --no-dev --prefer-dist --optimize-autoloader --no-interaction
 
 RUN mkdir -p storage/framework/cache storage/framework/sessions \
     storage/framework/views storage/logs bootstrap/cache \
@@ -28,7 +31,7 @@ RUN mkdir -p storage/framework/cache storage/framework/sessions \
     && chmod -R 775 storage bootstrap/cache \
     && chmod 664 database/database.sqlite
 
-RUN chown -R www-data:www-data storage bootstrap/cache
+RUN test -f vendor/autoload.php
 
 EXPOSE 80
 
