@@ -182,7 +182,10 @@ async function submitAuth() {
     const payload = await parseApiResponse(response)
 
     if (!response.ok) {
-      throw new Error(payload.message || Object.values(payload.errors || {}).flat()[0] || 'Authentication failed.')
+      const message = response.status === 404
+        ? 'Backend API is not connected. Set VITE_API_URL in Vercel to your deployed Laravel API URL, then redeploy.'
+        : payload.message || Object.values(payload.errors || {}).flat()[0] || 'Authentication failed.'
+      throw new Error(message)
     }
 
     if (payload.requires_verification) {

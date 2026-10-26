@@ -92,13 +92,8 @@ class GradeScheduleController extends Controller
         $data = $request->validate([
             'schoolYear' => ['required', 'string', 'regex:/^\d{4}-\d{4}$/'],
             'semester' => ['required', Rule::in(['1st Semester', '2nd Semester'])],
-            'midtermOpens' => ['required', 'date'],
-            'finalsOpens' => ['nullable', 'date', 'after_or_equal:midtermOpens'],
-            'submitGradeDeadline' => ['nullable', 'date'],
+            'submitGradeDeadline' => ['required', 'date'],
         ]);
-
-        abort_if($data['finalsOpens'] ?? null, 422, 'Mark Midterm complete before setting the Finals opening date.');
-        abort_if($data['submitGradeDeadline'] ?? null, 422, 'Mark Finals complete before setting the submission deadline.');
         abort_if(
             !$this->canCreateAcademicYear($data['schoolYear']),
             422,
@@ -120,9 +115,7 @@ class GradeScheduleController extends Controller
             'semester' => $data['semester'],
             'year_level' => 'Grade Period',
             'courses' => [],
-            'midterm_opens' => $data['midtermOpens'] ?? null,
-            'finals_opens' => $data['finalsOpens'] ?? null,
-            'submit_grade_deadline' => $data['submitGradeDeadline'] ?? null,
+            'submit_grade_deadline' => $data['submitGradeDeadline'],
             'status' => 'Released',
             'created_by' => $user->id,
         ]);
@@ -139,61 +132,21 @@ class GradeScheduleController extends Controller
         $data = $request->validate([
             'schoolYear' => ['required', 'string', Rule::in([$schedule->school_year])],
             'semester' => ['required', Rule::in(['1st Semester', '2nd Semester'])],
-            'midtermOpens' => ['nullable', 'date'],
-            'finalsOpens' => ['nullable', 'date', 'after_or_equal:midtermOpens'],
-            'submitGradeDeadline' => ['nullable', 'date'],
+            'submitGradeDeadline' => ['required', 'date'],
         ]);
 
-        $midtermLocked = (bool) $schedule->midterm_locked;
-        $finalsLocked = (bool) $schedule->finals_locked;
-        $midtermOpenDate = $schedule->midterm_opens?->toDateString();
-        $finalsOpenDate = $schedule->finals_opens?->toDateString();
         $submitGradeDeadline = $schedule->submit_grade_deadline?->toDateString();
-        $reopened = !$midtermLocked || !$finalsLocked;
         $isUnchangedPeriod = $data['schoolYear'] === $schedule->school_year
             && $data['semester'] === $schedule->semester;
-        $datesChanged = ($data['midtermOpens'] ?? null) !== $midtermOpenDate
-            || ($data['finalsOpens'] ?? null) !== $finalsOpenDate
-            || ($data['submitGradeDeadline'] ?? null) !== $submitGradeDeadline;
+        $deadlineChanged = $data['submitGradeDeadline'] !== $submitGradeDeadline;
 
         abort_if(
-            !$reopened && $finalsLocked
-                && $submitGradeDeadline !== null
-                && $submitGradeDeadline < now('Asia/Manila')->toDateString()
-                && $datesChanged,
+            ($schedule->submit_grade_locked
+                || ($submitGradeDeadline !== null && $submitGradeDeadline <= now('Asia/Manila')->toDateString()))
+                && $deadlineChanged,
             422,
             'Completed academic years cannot be edited.',
         );
-        abort_if(
-            $midtermLocked && ($data['midtermOpens'] ?? null) !== $midtermOpenDate,
-            422,
-            'The Midterm opening date cannot be changed after Midterm is marked complete.',
-        );
-        abort_if(
-            !$midtermLocked && ($data['finalsOpens'] ?? null) !== $finalsOpenDate,
-            422,
-            'Mark Midterm complete before setting the Finals opening date.',
-        );
-        abort_if(
-            $finalsLocked && ($data['finalsOpens'] ?? null) !== $finalsOpenDate,
-            422,
-            'The Finals opening date cannot be changed after Finals is marked complete.',
-        );
-        abort_if(
-            isset($data['submitGradeDeadline'], $data['finalsOpens'])
-                && $data['submitGradeDeadline'] < $data['finalsOpens'],
-            422,
-            'The submission deadline must be on or after the Finals opening date.',
-        );
-        abort_if(
-            $midtermLocked && $finalsLocked
-                && $submitGradeDeadline !== null
-                && $submitGradeDeadline < now('Asia/Manila')->toDateString()
-                && ($data['submitGradeDeadline'] ?? null) !== $submitGradeDeadline,
-            422,
-            'The Submit of Grade Deadline cannot be changed after it has passed.',
-        );
-
         abort_if(
             !$isUnchangedPeriod && $this->gradePeriodExists($data['schoolYear'], $data['semester'], $schedule->id),
             422,
@@ -208,52 +161,36 @@ class GradeScheduleController extends Controller
         $schedule->update([
             'school_year' => $data['schoolYear'],
             'semester' => $data['semester'],
-            'midterm_opens' => $data['midtermOpens'] ?? null,
-            'finals_opens' => $data['finalsOpens'] ?? null,
-            'submit_grade_deadline' => $data['submitGradeDeadline'] ?? null,
+            'submit_grade_deadline' => $data['submitGradeDeadline'],
         ]);
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
     }
 
-    public function completePeriod(Request $request, GradeSchedule $schedule): JsonResponse
+    public function lockSubmission(Request $request, GradeSchedule $schedule): JsonResponse
     {
-        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can complete grade periods.');
+        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can lock grade submission.');
         abort_unless($schedule->year_level === 'Grade Period', 404);
+        abort_if($schedule->submit_grade_locked, 422, 'Grade submission is already locked.');
+        abort_if(!$schedule->submit_grade_deadline, 422, 'Set the Submit of Grade Deadline before locking grade submission.');
+        abort_if(
+            $schedule->submit_grade_deadline->toDateString() > now('Asia/Manila')->toDateString(),
+            422,
+            'Grade submission cannot be locked before the deadline.',
+        );
 
-        $data = $request->validate([
-            'period' => ['required', Rule::in(['midterm', 'finals'])],
-        ]);
-        $today = now('Asia/Manila')->toDateString();
-
-        if ($data['period'] === 'midterm') {
-            abort_if($schedule->midterm_locked, 422, 'Midterm is already marked complete.');
-            abort_if(!$schedule->midterm_opens, 422, 'Set the Midterm opening date first.');
-            abort_if($schedule->midterm_opens->toDateString() > $today, 422, 'Midterm cannot be completed before it opens.');
-            $schedule->update(['midterm_locked' => true]);
-        } else {
-            abort_if($schedule->finals_locked, 422, 'Finals is already marked complete.');
-            abort_if(!$schedule->finals_opens, 422, 'Set the Finals opening date first.');
-            abort_if($schedule->finals_opens->toDateString() > $today, 422, 'Finals cannot be completed before it opens.');
-            $schedule->update(['finals_locked' => true]);
-        }
+        $schedule->update(['submit_grade_locked' => true]);
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
     }
 
-    public function reopenPeriod(Request $request, GradeSchedule $schedule): JsonResponse
+    public function unlockSubmission(Request $request, GradeSchedule $schedule): JsonResponse
     {
-        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can reopen grade periods.');
+        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can unlock grade submission.');
         abort_unless($schedule->year_level === 'Grade Period', 404);
+        abort_if(!$schedule->submit_grade_locked, 422, 'Grade submission is already unlocked.');
 
-        $data = $request->validate([
-            'period' => ['required', Rule::in(['midterm', 'finals'])],
-        ]);
-
-        $lockedField = $data['period'] === 'midterm' ? 'midterm_locked' : 'finals_locked';
-        abort_if(!$schedule->{$lockedField}, 422, ucfirst($data['period']) . ' is already open.');
-
-        $schedule->update([$lockedField => false]);
+        $schedule->update(['submit_grade_locked' => false]);
 
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
     }
@@ -263,10 +200,9 @@ class GradeScheduleController extends Controller
         abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can delete grade periods.');
         abort_unless($schedule->year_level === 'Grade Period', 404);
         abort_if(
-            $schedule->midterm_locked
-                && $schedule->finals_locked
-                && $schedule->submit_grade_deadline !== null
-                && $schedule->submit_grade_deadline->toDateString() < now('Asia/Manila')->toDateString(),
+            $schedule->submit_grade_locked
+                || ($schedule->submit_grade_deadline !== null
+                    && $schedule->submit_grade_deadline->toDateString() <= now('Asia/Manila')->toDateString()),
             422,
             'Completed academic years cannot be edited.',
         );
@@ -285,11 +221,8 @@ class GradeScheduleController extends Controller
             'courses' => $schedule->courses ?? [],
             'releasedDate' => $schedule->released_date?->toDateString(),
             'status' => $schedule->status,
-            'midtermOpens' => $schedule->midterm_opens?->toDateString(),
-            'finalsOpens' => $schedule->finals_opens?->toDateString(),
             'submitGradeDeadline' => $schedule->submit_grade_deadline?->toDateString(),
-            'midtermLocked' => (bool) $schedule->midterm_locked,
-            'finalsLocked' => (bool) $schedule->finals_locked,
+            'submitGradeLocked' => (bool) $schedule->submit_grade_locked,
         ];
     }
 
@@ -317,7 +250,7 @@ class GradeScheduleController extends Controller
             return $startYear === $currentYear;
         }
 
-        return (bool) $previousFinalPeriod->finals_locked;
+        return (bool) $previousFinalPeriod->submit_grade_locked;
     }
 
     private function canCreateSemester(string $schoolYear, string $semester): bool
@@ -333,14 +266,14 @@ class GradeScheduleController extends Controller
             ->first();
 
         return $firstSemester
-            && $firstSemester->finals_locked
+            && $firstSemester->submit_grade_locked
             && $firstSemester->submit_grade_deadline !== null
-            && $firstSemester->submit_grade_deadline->toDateString() < now('Asia/Manila')->toDateString();
+            && $firstSemester->submit_grade_deadline->toDateString() <= now('Asia/Manila')->toDateString();
     }
 
     private function semesterAvailabilityMessage(string $schoolYear): string
     {
-        return "The 2nd Semester for A.Y. {$schoolYear} can be scheduled after the 1st Semester Finals are complete and its Submit of Grade Deadline has passed.";
+        return "The 2nd Semester for A.Y. {$schoolYear} can be scheduled after the 1st Semester Submit of Grade is locked and its deadline has passed.";
     }
 
     private function academicYearAvailabilityMessage(string $schoolYear): string
@@ -351,7 +284,7 @@ class GradeScheduleController extends Controller
 
         $previousSchoolYear = ((int) $matches[1] - 1) . '-' . (int) $matches[1];
 
-        return "The {$schoolYear} school year can be scheduled after Finals for the 2nd Semester of A.Y. {$previousSchoolYear} is marked complete.";
+        return "The {$schoolYear} school year can be scheduled after Submit of Grade for the 2nd Semester of A.Y. {$previousSchoolYear} is locked.";
     }
 
     private function gradePeriodExists(string $schoolYear, string $semester, ?int $exceptId = null): bool

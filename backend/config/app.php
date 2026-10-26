@@ -53,6 +53,7 @@ return [
     */
 
     'url' => env('APP_URL', 'http://localhost'),
+    'seed_demo_accounts' => (bool) env('SEED_DEMO_ACCOUNTS', false),
 
     /*
     |--------------------------------------------------------------------------

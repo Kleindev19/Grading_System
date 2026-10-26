@@ -73,11 +73,8 @@ export interface GradeSchedule {
   courses: string[]
   releasedDate?: string
   status: 'Scheduled' | 'Released'
-  midtermOpens?: string
-  finalsOpens?: string
   submitGradeDeadline?: string
-  midtermLocked: boolean
-  finalsLocked: boolean
+  submitGradeLocked: boolean
 }
 
 export interface Student {
@@ -271,7 +268,7 @@ export async function releaseGradeSchedule(id: number): Promise<GradeSchedule> {
   return payload.schedule
 }
 
-export async function createGradePeriod(period: { schoolYear: string; semester: string; midtermOpens: string; finalsOpens?: string; submitGradeDeadline?: string }): Promise<GradeSchedule> {
+export async function createGradePeriod(period: { schoolYear: string; semester: string; submitGradeDeadline: string }): Promise<GradeSchedule> {
   const payload = await apiRequest<{ schedule: GradeSchedule }>('/grade-periods', {
     method: 'POST',
     body: JSON.stringify(period),
@@ -279,7 +276,7 @@ export async function createGradePeriod(period: { schoolYear: string; semester: 
   return payload.schedule
 }
 
-export async function updateGradePeriod(id: number, period: { schoolYear: string; semester: string; midtermOpens: string; finalsOpens?: string; submitGradeDeadline?: string }): Promise<GradeSchedule> {
+export async function updateGradePeriod(id: number, period: { schoolYear: string; semester: string; submitGradeDeadline: string }): Promise<GradeSchedule> {
   const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(period),
@@ -287,18 +284,16 @@ export async function updateGradePeriod(id: number, period: { schoolYear: string
   return payload.schedule
 }
 
-export async function completeGradePeriod(id: number, period: 'midterm' | 'finals'): Promise<GradeSchedule> {
-  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/complete`, {
+export async function lockGradeSubmission(id: number): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/lock-submission`, {
     method: 'PATCH',
-    body: JSON.stringify({ period }),
   })
   return payload.schedule
 }
 
-export async function reopenGradePeriod(id: number, period: 'midterm' | 'finals'): Promise<GradeSchedule> {
-  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/reopen`, {
+export async function unlockGradeSubmission(id: number): Promise<GradeSchedule> {
+  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/unlock-submission`, {
     method: 'PATCH',
-    body: JSON.stringify({ period }),
   })
   return payload.schedule
 }

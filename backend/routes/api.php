@@ -33,7 +33,7 @@ Route::middleware('auth.token')->group(function () {
     Route::patch('/grade-schedules/{schedule}/release', [GradeScheduleController::class, 'release']);
     Route::post('/grade-periods', [GradeScheduleController::class, 'storePeriod']);
     Route::patch('/grade-periods/{schedule}', [GradeScheduleController::class, 'updatePeriod']);
-    Route::patch('/grade-periods/{schedule}/complete', [GradeScheduleController::class, 'completePeriod']);
-    Route::patch('/grade-periods/{schedule}/reopen', [GradeScheduleController::class, 'reopenPeriod']);
+    Route::patch('/grade-periods/{schedule}/lock-submission', [GradeScheduleController::class, 'lockSubmission']);
+    Route::patch('/grade-periods/{schedule}/unlock-submission', [GradeScheduleController::class, 'unlockSubmission']);
     Route::delete('/grade-periods/{schedule}', [GradeScheduleController::class, 'destroyPeriod']);
 });

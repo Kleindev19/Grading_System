@@ -22,7 +22,7 @@
             <template v-if="activePeriod !== 'final-grade'"><div class="choice-action"><button type="button" class="add-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleAddChoices">+ Add Assessment</button><div v-if="addChoiceOpen" class="assessment-choices"><button v-for="type in assessmentTypes" :key="type.category" type="button" @click="addAssessment(type.category)">{{ type.name }}</button><button type="button" @click="openCustomAssessment"><span aria-hidden="true">+</span> Custom Assessment</button></div></div>
             <div class="choice-action"><button type="button" class="remove-button" :disabled="gradeHeaders.length <= 1 || isGradeLocked(activeScorePeriod)" @click="toggleRemoveChoices">Remove</button><div v-if="removeChoiceOpen" class="assessment-choices"><button v-for="assessment in gradeHeaders" :key="assessment" type="button" @click="selectedAssessment = assessment; removeSelectedAssessment()">{{ assessmentDisplayName(assessment) }}</button></div></div>
             <div class="choice-action"><button type="button" class="restore-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleRestoreChoices">Restore</button><div v-if="restoreChoiceOpen" class="assessment-choices"><button v-for="assessment in defaultGradeHeaders" :key="assessment" type="button" :disabled="gradeHeaders.includes(assessment)" @click="selectedAssessment = assessment; restoreSelectedAssessment()">{{ assessment }}</button></div></div>
-            <button type="button" class="criteria-open-button" @click="openCriteriaEditor">▤ Criteria</button>
+            <button type="button" class="criteria-open-button" :disabled="isGradeLocked(activeScorePeriod)" @click="openCriteriaEditor">▤ Criteria</button>
             </template>
             <span v-if="draftSaveStatus" class="draft-save-status" role="status">
               <svg v-if="draftSaveStatus === 'Saving draft...'" class="draft-save-icon is-saving" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4" /></svg>
@@ -43,8 +43,8 @@
           </section>
           <aside class="summary-box"><template v-if="activePeriod === 'final-grade'"><h2>FINAL GRADE WEIGHTS</h2><table><thead><tr><th>Grading Period</th><th>Percentage</th></tr></thead><tbody><tr><td>Midterm</td><td>{{ FINAL_GRADE_WEIGHTS.midterm }}%</td></tr><tr><td>Finals</td><td>{{ FINAL_GRADE_WEIGHTS.finals }}%</td></tr><tr class="total"><td>TOTAL</td><td>{{ FINAL_GRADE_WEIGHTS.midterm + FINAL_GRADE_WEIGHTS.finals }}%</td></tr></tbody></table></template><template v-else><h2>{{ criteriaPeriod.toUpperCase() }}</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td>{{ item.maxScore }}</td><td>{{ item.weight }}%</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></template></aside>
         </div>
-        <template v-if="activePeriod === 'final-grade'"><div class="final-grade-actions"><button class="export-excel-btn" type="button" :disabled="allGradeStudents.length === 0" @click="exportFinalGrades">Export to Excel</button><button class="submit-action-btn" type="button" :disabled="isSubmitting || isFinalGradeSubmissionLocked" :title="finalGradeSubmissionDeadlineMessage" @click="openSubmissionConfirmation">Submit to Registrar</button></div><small role="status">{{ finalGradeSubmissionDeadlineMessage }}</small></template>
-        <div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="period-lock-title"><div class="notice-icon">&#128197;</div><h2 id="period-lock-title">{{ periodLockTitle(noticePeriod) }}</h2><p>{{ periodLockMessage(noticePeriod) }}</p><strong v-if="periodHasNotOpened(noticePeriod)">Opens on {{ formatPeriodDate(noticePeriod, 'opens') }}</strong><button type="button" @click="showFinalsNotice = false">Close</button></section></div>
+        <template v-if="activePeriod === 'final-grade'"><div class="final-grade-actions"><button class="export-excel-btn" type="button" :disabled="allGradeStudents.length === 0" @click="exportFinalGrades">Export to Excel</button><button class="submit-action-btn" type="button" :disabled="isSubmitting || (!hasFinalGradeSubmissionDeadline && !isSubmissionLockedByRegistrar)" :title="finalGradeSubmissionDeadlineMessage" @click="openSubmissionConfirmation">Submit to Registrar</button></div><small role="status">{{ finalGradeSubmissionDeadlineMessage }}</small></template>
+        <div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="period-lock-title"><div class="notice-icon">&#128197;</div><h2 id="period-lock-title">{{ periodLockTitle(noticePeriod) }}</h2><p>{{ periodLockMessage(noticePeriod) }}</p><button type="button" @click="showFinalsNotice = false">Close</button></section></div>
         <div v-if="customAssessmentOpen" class="modal-backdrop" @click.self="customAssessmentOpen = false"><form class="custom-assessment-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-assessment-title" @submit.prevent="submitCustomAssessment"><h2 id="custom-assessment-title">Add Custom Assessment</h2><label>Include in category<select v-model="customAssessmentCategory"><option v-for="type in customAssessmentCategories" :key="type.value" :value="type.value">{{ type.name }}</option></select></label><label>Assessment name<input v-model="customAssessmentName" autofocus maxlength="40" placeholder="e.g. Project" required /></label><p v-if="customAssessmentCategory === 'custom'">This creates a separate grading category. Set its percentage and maximum score in Criteria after adding it.</p><p v-else>Scores are averaged with the selected category. Project uses the Assignment weight; Attendance uses the Recitation weight.</p><p v-if="customAssessmentError" class="custom-assessment-error" role="alert">{{ customAssessmentError }}</p><div class="custom-assessment-actions"><button type="button" @click="customAssessmentOpen = false">Cancel</button><button type="submit">Add Assessment</button></div></form></div>
         <Teleport to="body"><div v-if="submissionConfirmOpen" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeSubmissionConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="submission-confirmation-title"><h2 id="submission-confirmation-title">Are you sure you want to submit?</h2><p>Once submitted, grades will be sent to the Registrar.<br />To request changes after submission, please contact the Registrar's Office directly.</p><p v-if="submissionError" class="submission-confirmation-error" role="alert">{{ submissionError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isSubmitting" @click="closeSubmissionConfirmation">Go Back</button><button type="button" :disabled="isSubmitting" @click="submitToRegistrar(true)">{{ isSubmitting ? 'Submitting...' : 'Submit Grades' }}</button></div></section></div></Teleport>
         <div v-if="criteriaOpen" class="modal-backdrop" @click.self="closeCriteriaEditor"><section class="criteria-dialog" role="dialog" aria-modal="true" aria-labelledby="criteria-title"><h2 id="criteria-title">Grading Criteria</h2><p class="criteria-period-label">{{ criteriaPeriod === 'midterm' ? 'MIDTERM' : 'FINALS' }}</p><div class="criteria-table-scroll"><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].maxScore" type="number" min="1" max="100" step="any" :aria-label="`${item.name} maximum score`" @input="clearCriteriaError" /><span v-else>{{ item.maxScore }}</span></td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].weight" type="number" min="0" :max="maxCriterionWeight(item.key)" step="0.01" :aria-label="`${item.name} percentage`" @input="limitCriterionWeight(item.key, $event)" /><span v-else>{{ item.weight }}%</span></td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></div><p class="criteria-help">Percentages for each grading period must total 100%. Scores are converted using each item's maximum score. Each assessment maximum must be between 1 and 100.</p><p v-if="criteriaError" class="criteria-error" role="alert">{{ criteriaError }}</p><div class="criteria-actions"><button v-if="!criteriaEditing" type="button" @click="startCriteriaEdit">Edit</button><button v-if="!criteriaEditing" type="button" @click="closeCriteriaEditor">Done</button><template v-else><button type="button" :disabled="criteriaSaving" @click="cancelCriteriaEdit">Cancel</button><button type="button" :disabled="!canSaveCriteria" @click="saveCriteria">{{ criteriaSaving ? 'Saving...' : 'Save' }}</button></template></div></section></div>
@@ -59,7 +59,7 @@ import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import { getGradeCriteria, getGradeDraft, getGradeSchedules, getGradeSheets, getStudents, saveGradeCriteria, saveGradeDraft, submitGradeSheet } from '../services/dataService'
 import { assessmentCategory, assessmentCriterionKey, assessmentCriterionName, createDefaultCriteria, normalizePeriodScores, calculateRecordGrades, calculateTermGrade, FINAL_GRADE_WEIGHTS } from '../services/grading'
 import { parseAcademicPeriod, sameAcademicPeriod } from '../services/academicPeriod'
-import { formatSystemDate, getSystemDateString, getSystemDayStart, parseSystemDate } from '../services/systemTime'
+import { getSystemDateString, parseSystemDate } from '../services/systemTime'
 const activeRoster = ref([])
 const draftSaveStatus = ref('')
 const props = defineProps({ user: { type: Object, default: null } })
@@ -97,22 +97,20 @@ const gradeSheets = ref([])
 const currentClock = ref(Date.now())
 const isFinalGradeSubmissionLocked = computed(() => {
   const gradePeriod = getGradePeriodSchedule()
-  const deadline = gradePeriod?.submitGradeDeadline
-  if (!parseSystemDate(deadline)) return true
-  if (!gradePeriod.midtermLocked || !gradePeriod.finalsLocked) return false
-  return getSystemDateString(currentClock.value) > deadline
+  return !parseSystemDate(gradePeriod?.submitGradeDeadline) || Boolean(gradePeriod?.submitGradeLocked)
 })
+const isSubmissionLockedByRegistrar = computed(() => Boolean(getGradePeriodSchedule()?.submitGradeLocked))
+const hasFinalGradeSubmissionDeadline = computed(() => Boolean(parseSystemDate(getGradePeriodSchedule()?.submitGradeDeadline)))
 const finalGradeSubmissionDeadlineMessage = computed(() => {
   const gradePeriod = getGradePeriodSchedule()
   const deadline = resolveDeadline(gradePeriod?.submitGradeDeadline)
   if (!deadline) return 'Submit of Grade Deadline is not set.'
-  if (!gradePeriod.midtermLocked || !gradePeriod.finalsLocked) {
-    return 'The grading period has been reopened. Final grades may be submitted now.'
-  }
   const formattedDeadline = deadline.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-  return isFinalGradeSubmissionLocked.value
-    ? `The Submit of Grade Deadline passed on ${formattedDeadline}.`
-    : `Submit final grades by ${formattedDeadline}.`
+  if (gradePeriod.submitGradeLocked) return `The Registrar locked grade submission after the deadline on ${formattedDeadline}.`
+  if (getSystemDateString(currentClock.value) > gradePeriod.submitGradeDeadline) {
+    return `The Submit of Grade Deadline passed on ${formattedDeadline}. Grade submission is awaiting Registrar lock.`
+  }
+  return `Submit final grades by ${formattedDeadline}.`
 })
 const activeScorePeriod = computed(() => activePeriod.value === 'finals' ? 'finals' : 'midterm')
 const gradeHeaders = computed(() => gradeHeadersByPeriod[activeScorePeriod.value])
@@ -392,49 +390,30 @@ function getGradePeriod(type) {
   const period = getGradePeriodSchedule()
   if (!period) return null
   return {
-    opens: resolveDeadline(type === 'midterm' ? period.midtermOpens : period.finalsOpens),
-    isLocked: type === 'midterm' ? period.midtermLocked : period.finalsLocked,
+    submissionLocked: period.submitGradeLocked,
   }
 }
 
 function isGradeLocked(type) {
   const period = getGradePeriod(type)
-  if (!period?.opens) return true
-  if (period.isLocked) return true
-  return getSystemDayStart(currentClock.value) < period.opens.getTime()
-}
-
-function periodHasNotOpened(type) {
-  const opens = getGradePeriod(type)?.opens
-  if (!opens) return false
-  return getSystemDayStart(currentClock.value) < opens.getTime()
+  return !period
 }
 
 function periodLockTitle(type) {
   const label = type === 'midterm' ? 'Midterm' : 'Finals'
   const period = getGradePeriod(type)
-  if (!period?.opens) return `${label} opening date is not set for this semester`
-  return `${label} grading is not open yet`
+  return period?.submissionLocked ? 'Grade submission is locked' : `${label} grading period is not set`
 }
 
 function periodLockMessage(type) {
   const period = getGradePeriod(type)
-  if (!period?.opens) {
-    const academicPeriod = parseAcademicPeriod(selectedCourse.value.semester || '')
-    if (academicPeriod.semester && academicPeriod.schoolYear.match(/^\d{4}-\d{4}$/)) {
-      const semesterLabel = academicPeriod.semester.replace(/semester/i, 'Semester')
-      return `No Grade Period is set for ${semesterLabel}, A.Y. ${academicPeriod.schoolYear}. Set the same semester and school year in the Registrar dashboard.`
-    }
-    return 'The Registrar must set a Grade Period for this semester before grading can begin.'
+  if (period?.submissionLocked) return 'The Registrar has locked grade submission for this semester.'
+  const academicPeriod = parseAcademicPeriod(selectedCourse.value.semester || '')
+  if (academicPeriod.semester && academicPeriod.schoolYear.match(/^\d{4}-\d{4}$/)) {
+    const semesterLabel = academicPeriod.semester.replace(/semester/i, 'Semester')
+    return `No Grade Period is set for ${semesterLabel}, A.Y. ${academicPeriod.schoolYear}. Set a submission deadline in the Registrar dashboard.`
   }
-  return 'Grade entry will become available on the date set by the Registrar.'
-}
-
-function formatPeriodDate(type, dateType = 'opens') {
-  const period = getGradePeriod(type)
-  const date = period?.[dateType]
-  if (!date) return 'the configured date'
-  return formatSystemDate(date, { month: 'long', day: 'numeric', year: 'numeric' })
+  return 'The Registrar must set a Grade Period for this semester before grading can begin.'
 }
 
 async function openGradingPeriod(type) {
@@ -589,7 +568,9 @@ async function submitToRegistrar(confirmed = false) {
     return
   }
   if (isFinalGradeSubmissionLocked.value) {
-    submissionError.value = finalGradeSubmissionDeadlineMessage.value
+    submissionError.value = isSubmissionLockedByRegistrar.value
+      ? 'The submission is locked by the Registrar.'
+      : finalGradeSubmissionDeadlineMessage.value
     submissionConfirmOpen.value = true
     return
   }
@@ -602,7 +583,9 @@ async function submitToRegistrar(confirmed = false) {
   await flushGradeDraftSave()
   currentClock.value = Date.now()
   if (isFinalGradeSubmissionLocked.value) {
-    submissionError.value = finalGradeSubmissionDeadlineMessage.value
+    submissionError.value = isSubmissionLockedByRegistrar.value
+      ? 'The submission is locked by the Registrar.'
+      : finalGradeSubmissionDeadlineMessage.value
     submissionConfirmOpen.value = true
     return
   }
@@ -666,7 +649,9 @@ async function submitToRegistrar(confirmed = false) {
     submissionConfirmOpen.value = false
     emit('submitted')
   } catch (error) {
-    submissionError.value = error instanceof Error ? error.message : 'Unable to submit grades.'
+    submissionError.value = error instanceof Error && error.message.includes('locked grade submission')
+      ? 'The submission is locked by the Registrar.'
+      : error instanceof Error ? error.message : 'Unable to submit grades.'
   } finally {
     isSubmitting.value = false
   }
@@ -674,6 +659,11 @@ async function submitToRegistrar(confirmed = false) {
 
 function openSubmissionConfirmation() {
   if (isSubmitting.value || activePeriod.value !== 'final-grade') return
+  if (isSubmissionLockedByRegistrar.value) {
+    noticePeriod.value = activeScorePeriod.value
+    showFinalsNotice.value = true
+    return
+  }
   submissionError.value = isFinalGradeSubmissionLocked.value ? finalGradeSubmissionDeadlineMessage.value : ''
   submissionConfirmOpen.value = true
 }

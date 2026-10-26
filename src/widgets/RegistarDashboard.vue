@@ -284,20 +284,17 @@
               <form class="period-form" @submit.prevent="saveGradePeriod">
                 <p class="period-form-title">&#128197; {{ editingPeriodId ? 'Edit Grade Period' : 'Set Grade Period' }}</p>
                 <div class="period-fields">
-                  <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (previous 2nd Semester Finals not locked)' }}</option></select></div>
-                  <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="isGradePeriodTaken('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="isGradePeriodTaken('2nd Semester') || !canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (complete 1st Semester first)' }}</option></select></div>
-                  <div class="period-date-field"><label for="midterm-opens">Midterm Open</label><span class="period-date-control"><input id="midterm-opens" v-model="periodForm.midtermOpens" type="date" :disabled="Boolean(editingPeriodId && isMidtermDateLocked)" required /></span></div>
-                  <div class="period-date-field" :class="{ 'period-field-locked': !editingGradePeriod?.midtermLocked }"><label for="finals-opens">Finals Open</label><small v-if="!editingGradePeriod?.midtermLocked">Available after Midterm is locked.</small><span class="period-date-control"><input id="finals-opens" v-model="periodForm.finalsOpens" type="date" :min="periodForm.midtermOpens" :disabled="!editingGradePeriod?.midtermLocked || isFinalsDateLocked" :required="Boolean(editingGradePeriod?.midtermLocked)" /><button v-if="editingGradePeriod?.midtermLocked && periodForm.finalsOpens" type="button" class="complete-period-button" :aria-label="editingGradePeriod.finalsLocked ? 'Unlock Finals' : 'Lock Finals'" :title="editingGradePeriod.finalsLocked ? 'Unlock Finals for grading' : 'Mark Finals complete and lock its date'" :disabled="!editingGradePeriod.finalsLocked && (!isPeriodOpen(periodForm.finalsOpens) || isGradePeriodReadOnly(editingGradePeriod))" @click="setGradePeriodLock(editingGradePeriod, 'finals', editingGradePeriod.finalsLocked ? 'unlock' : 'lock')"><span class="lock-checkbox" :class="{ checked: editingGradePeriod.finalsLocked }" aria-hidden="true"><span v-if="editingGradePeriod.finalsLocked">&#10003;</span></span></button></span></div>
-                  <div class="period-date-field"><label for="submit-grade-deadline">Submit of Grade Deadline</label><small v-if="editingGradePeriod && (!editingGradePeriod.midtermLocked || !editingGradePeriod.finalsLocked)">Available while Midterm or Finals is unlocked.</small><input id="submit-grade-deadline" v-model="periodForm.submitGradeDeadline" type="date" :min="periodForm.finalsOpens || periodForm.midtermOpens" :disabled="!editingGradePeriod || isSubmitGradeDeadlineLocked" :required="Boolean(editingGradePeriod?.midtermLocked)" /></div>
+                  <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (previous 2nd Semester submission not locked)' }}</option></select></div>
+                  <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="isGradePeriodTaken('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="isGradePeriodTaken('2nd Semester') || !canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (lock 1st Semester submission after deadline first)' }}</option></select></div>
+                  <div class="period-date-field"><label for="submit-grade-deadline">Submit of Grade Deadline</label><input id="submit-grade-deadline" v-model="periodForm.submitGradeDeadline" type="date" :disabled="Boolean(editingGradePeriod && isGradePeriodReadOnly(editingGradePeriod))" required /></div>
                   <button class="save-period-button" type="submit"><span v-if="!editingPeriodId" aria-hidden="true">&#128190;</span>{{ editingPeriodId ? 'Update Grade' : 'Save Grade Period' }}</button>
                 </div>
               </form>
               <section class="active-schedules">
                 <h4>Active Schedules</h4>
                 <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
-                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm opens: {{ period.midtermOpens || '-' }} &nbsp;|&nbsp; Finals opens: {{ period.finalsOpens || '-' }} &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
-                  <div class="period-stage-status"><button v-if="period.midtermLocked" type="button" class="complete-period-button" title="Unlock Midterm" aria-label="Unlock Midterm" @click="setGradePeriodLock(period, 'midterm', 'unlock')"><span class="lock-checkbox checked" aria-hidden="true">&#10003;</span><span>Midterm Locked</span></button><button v-else-if="period.midtermOpens" type="button" class="complete-period-button" title="Lock Midterm" aria-label="Lock Midterm" :disabled="!isPeriodOpen(period.midtermOpens) || isGradePeriodReadOnly(period)" @click="setGradePeriodLock(period, 'midterm', 'lock')"><span class="lock-checkbox" aria-hidden="true"></span><span>Lock Midterm</span></button><span class="period-state" :class="{ locked: periodState(period, 'midterm') !== 'Open' }">Midterm {{ periodState(period, 'midterm') }}</span></div>
-                  <div class="period-stage-status"><button v-if="period.finalsLocked" type="button" class="complete-period-button" title="Unlock Finals" aria-label="Unlock Finals" @click="setGradePeriodLock(period, 'finals', 'unlock')"><span class="lock-checkbox checked" aria-hidden="true">&#10003;</span><span>Finals Locked</span></button><button v-else-if="period.finalsOpens" type="button" class="complete-period-button" title="Lock Finals" aria-label="Lock Finals" :disabled="!isPeriodOpen(period.finalsOpens) || isGradePeriodReadOnly(period)" @click="setGradePeriodLock(period, 'finals', 'lock')"><span class="lock-checkbox" aria-hidden="true"></span><span>Lock Finals</span></button><span class="period-state" :class="{ locked: periodState(period, 'finals') !== 'Open' }">Finals {{ periodState(period, 'finals') }}</span></div>
+                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm and Finals are open &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
+                  <div class="period-stage-status"><button type="button" class="complete-period-button" :class="{ 'submission-locked': period.submitGradeLocked }" :disabled="!period.submitGradeLocked && !canLockGradeSubmission(period)" :title="gradeSubmissionLockTitle(period)" @click="openGradeSubmissionConfirmation(period)"><span class="lock-checkbox" :class="{ checked: period.submitGradeLocked }" aria-hidden="true"><span v-if="period.submitGradeLocked">&#10003;</span></span><span>{{ period.submitGradeLocked ? 'Unlock Submit of Grade' : 'Lock Submit of Grade' }}</span></button></div>
                   <div class="period-actions"><button type="button" class="edit-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Edit grade period'" @click="editGradePeriod(period)">Edit</button><button type="button" class="remove-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Remove grade period'" @click="removeGradePeriod(period)">Remove</button></div>
                 </div>
                 <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
@@ -472,13 +469,13 @@
         </div>
       </section>
     </div>
-    <Teleport to="body"><div v-if="completionConfirmation" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeCompletionConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="period-lock-confirmation-title"><h2 id="period-lock-confirmation-title">Are you sure you want to {{ completionConfirmation.action }}?</h2><p>{{ completionConfirmation.action === 'unlock' ? 'This will reopen' : 'This will lock' }} {{ completionConfirmation.type === 'midterm' ? 'Midterm' : 'Finals' }} for {{ completionConfirmation.period.semester }}, A.Y. {{ completionConfirmation.period.schoolYear }}. The other grading period will not change. Unlocking either period reopens the Submit of Grade Deadline.</p><p v-if="completionError" class="submission-confirmation-error" role="alert">{{ completionError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isCompletingPeriod" @click="closeCompletionConfirmation">Go Back</button><button type="button" :disabled="isCompletingPeriod" @click="confirmCompleteGradePeriod">{{ isCompletingPeriod ? (completionConfirmation.action === 'unlock' ? 'Unlocking...' : 'Locking...') : (completionConfirmation.action === 'unlock' ? 'Unlock the ' : 'Lock the ') + (completionConfirmation.type === 'midterm' ? 'Midterm' : 'Finals') }}</button></div></section></div></Teleport>
+    <Teleport to="body"><div v-if="submissionLockConfirmation" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeGradeSubmissionLockConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="period-lock-confirmation-title"><h2 id="period-lock-confirmation-title">Are you sure you want to {{ submissionLockConfirmation.action }} the submission of grade?</h2><p v-if="submissionLockConfirmation.action === 'lock'">This will lock grade submission for {{ submissionLockConfirmation.period.semester }}, A.Y. {{ submissionLockConfirmation.period.schoolYear }}. Professors will no longer be able to submit or update grades for this period.</p><p v-else>This will unlock grade submission for {{ submissionLockConfirmation.period.semester }}, A.Y. {{ submissionLockConfirmation.period.schoolYear }}. Professors will be able to submit or update grades for this period again.</p><p v-if="submissionLockError" class="submission-confirmation-error" role="alert">{{ submissionLockError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isLockingGradeSubmission" @click="closeGradeSubmissionLockConfirmation">Go Back</button><button type="button" :disabled="isLockingGradeSubmission" @click="confirmUpdateGradeSubmissionLock">{{ isLockingGradeSubmission ? (submissionLockConfirmation.action === 'lock' ? 'Locking...' : 'Unlocking...') : (submissionLockConfirmation.action === 'lock' ? 'Lock Submit of Grade' : 'Unlock Submit of Grade') }}</button></div></section></div></Teleport>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { completeGradePeriod as completeGradePeriodRequest, createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, releaseGradeSchedule, reopenGradePeriod as reopenGradePeriodRequest, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, lockGradeSubmission, releaseGradeSchedule, unlockGradeSubmission, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
 import { formatSystemDate, getSystemDateParts, getSystemDateString, getSystemDayStart, parseSystemDate } from '../services/systemTime'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import ibeLogo from '../logo/ibe-logo.png'
@@ -510,14 +507,12 @@ const expandedReleaseYears = ref([`A.Y ${initialSystemYear} - ${initialSystemYea
 const periodForm = ref({
   schoolYear: `${initialSystemYear}-${initialSystemYear + 1}`,
   semester: 'Semester',
-  midtermOpens: '',
-  finalsOpens: '',
   submitGradeDeadline: '',
 })
 const editingPeriodId = ref(null)
-const completionConfirmation = ref(null)
-const completionError = ref('')
-const isCompletingPeriod = ref(false)
+const submissionLockConfirmation = ref(null)
+const submissionLockError = ref('')
+const isLockingGradeSubmission = ref(false)
 const currentAcademicYear = computed(() => {
   const year = getSystemDateParts(currentTime.value).year
   return `${year}-${year + 1}`
@@ -527,18 +522,6 @@ const gradePeriodSchoolYearOptions = computed(() => {
   return Array.from({ length: 5 }, (_, index) => `${startYear + index}-${startYear + index + 1}`)
 })
 const editingGradePeriod = computed(() => gradePeriods.value.find(item => item.id === editingPeriodId.value))
-const isMidtermDateLocked = computed(() => {
-  const period = editingGradePeriod.value
-  return Boolean(period && (period.midtermLocked || isGradePeriodReadOnly(period)))
-})
-const isFinalsDateLocked = computed(() => {
-  const period = editingGradePeriod.value
-  return Boolean(period && (period.finalsLocked || isGradePeriodReadOnly(period)))
-})
-const isSubmitGradeDeadlineLocked = computed(() => {
-  const period = editingGradePeriod.value
-  return Boolean(period && isGradePeriodReadOnly(period))
-})
 const gradePeriods = computed(() => schedules.value.filter(schedule => schedule.yearLevel === 'Grade Period'))
 const instituteLogos = { ibe: ibeLogo, ics: icsLogo, ite: iteLogo }
 const institutes = getInstitutes().map(institute => ({ ...institute, logo: instituteLogos[institute.id] }))
@@ -903,12 +886,24 @@ function startOfCurrentDay() {
 
 function isGradePeriodReadOnly(period) {
   const deadline = resolveDeadline(period.submitGradeDeadline)
+  return Boolean(period.submitGradeLocked || (deadline && deadline.getTime() <= startOfCurrentDay()))
+}
+
+function canLockGradeSubmission(period) {
+  const deadline = resolveDeadline(period.submitGradeDeadline)
   return Boolean(
-    period.midtermLocked
-      && period.finalsLocked
+    period.id
+      && !period.submitGradeLocked
       && deadline
-      && deadline.getTime() < startOfCurrentDay(),
+      && deadline.getTime() <= startOfCurrentDay(),
   )
+}
+
+function gradeSubmissionLockTitle(period) {
+  if (period.submitGradeLocked) return 'Grade submission is locked.'
+  if (!period.submitGradeDeadline) return 'Set a Submit of Grade Deadline first.'
+  if (!canLockGradeSubmission(period)) return `Available on ${period.submitGradeDeadline}.`
+  return 'Lock grade submission for this semester.'
 }
 
 function canCreateGradePeriodInYear(schoolYear) {
@@ -922,65 +917,53 @@ function canCreateGradePeriodInYear(schoolYear) {
   )
   if (!previousFinalPeriod) return startYear === currentStartYear
 
-  return Boolean(previousFinalPeriod?.finalsLocked)
+  return Boolean(previousFinalPeriod?.submitGradeLocked)
 }
 
-function periodState(period, type) {
-  const isLocked = type === 'midterm' ? period.midtermLocked : period.finalsLocked
-  if (isLocked) return 'Done'
-  const opens = resolveDeadline(type === 'midterm' ? period.midtermOpens : period.finalsOpens)
-  if (!opens) return 'Not set'
-  if (startOfCurrentDay() < opens.getTime()) return 'Upcoming'
-  return 'Open'
+function openGradeSubmissionConfirmation(period) {
+  const action = period.submitGradeLocked ? 'unlock' : 'lock'
+  if (action === 'lock' && !canLockGradeSubmission(period)) return
+  submissionLockError.value = ''
+  submissionLockConfirmation.value = { period, action }
 }
 
-function isPeriodOpen(dateValue) {
-  const opens = resolveDeadline(dateValue)
-  return Boolean(opens && opens.getTime() <= startOfCurrentDay())
+function closeGradeSubmissionLockConfirmation() {
+  if (isLockingGradeSubmission.value) return
+  submissionLockConfirmation.value = null
+  submissionLockError.value = ''
 }
 
-function setGradePeriodLock(period, type, action) {
-  if (!period.id) return
-  if (action === 'lock') {
-    const opens = type === 'midterm' ? period.midtermOpens : period.finalsOpens
-    if (!opens || !isPeriodOpen(opens) || isGradePeriodReadOnly(period)) return
-  }
-  completionError.value = ''
-  completionConfirmation.value = { period, type, action }
-}
-
-function closeCompletionConfirmation() {
-  if (isCompletingPeriod.value) return
-  completionConfirmation.value = null
-  completionError.value = ''
-}
-
-async function confirmCompleteGradePeriod() {
-  const confirmation = completionConfirmation.value
-  if (!confirmation?.period.id || isCompletingPeriod.value) return
-  isCompletingPeriod.value = true
+async function confirmUpdateGradeSubmissionLock() {
+  const confirmation = submissionLockConfirmation.value
+  const period = confirmation?.period
+  if (!period?.id || isLockingGradeSubmission.value) return
+  isLockingGradeSubmission.value = true
   try {
-    const updatePeriodRequest = confirmation.action === 'unlock'
-      ? reopenGradePeriodRequest
-      : completeGradePeriodRequest
-    const updated = await updatePeriodRequest(confirmation.period.id, confirmation.type)
+    const updateLockRequest = confirmation.action === 'lock' ? lockGradeSubmission : unlockGradeSubmission
+    const updated = await updateLockRequest(period.id)
     const index = schedules.value.findIndex(schedule => schedule.id === updated.id)
     if (index !== -1) schedules.value[index] = updated
-    if (editingPeriodId.value === updated.id) {
-      editingPeriodId.value = updated.id
+    if (confirmation.action === 'lock') {
+      const nextPeriod = updated.semester === '1st Semester'
+        ? { schoolYear: updated.schoolYear, semester: '2nd Semester' }
+        : {
+            schoolYear: `${Number(updated.schoolYear.slice(0, 4)) + 1}-${Number(updated.schoolYear.slice(0, 4)) + 2}`,
+            semester: '1st Semester',
+          }
+      const scheduledNextPeriod = gradePeriods.value.find(item =>
+        item.schoolYear === nextPeriod.schoolYear && item.semester === nextPeriod.semester,
+      )
+      editingPeriodId.value = scheduledNextPeriod?.id || null
       periodForm.value = {
-        schoolYear: updated.schoolYear,
-        semester: updated.semester,
-        midtermOpens: updated.midtermOpens || '',
-        finalsOpens: updated.finalsOpens || '',
-        submitGradeDeadline: updated.submitGradeDeadline || '',
+        ...nextPeriod,
+        submitGradeDeadline: scheduledNextPeriod?.submitGradeDeadline || '',
       }
     }
-    completionConfirmation.value = null
+    submissionLockConfirmation.value = null
   } catch (error) {
-    completionError.value = error instanceof Error ? error.message : 'Unable to update this grading period.'
+    submissionLockError.value = error instanceof Error ? error.message : 'Unable to update grade submission lock.'
   } finally {
-    isCompletingPeriod.value = false
+    isLockingGradeSubmission.value = false
   }
 }
 
@@ -998,7 +981,7 @@ function canCreateGradePeriodSemester(semester) {
     period.schoolYear === periodForm.value.schoolYear && period.semester === '1st Semester',
   )
   const deadline = resolveDeadline(firstSemester?.submitGradeDeadline)
-  return Boolean(firstSemester?.finalsLocked && deadline && deadline.getTime() < startOfCurrentDay())
+  return Boolean(firstSemester?.submitGradeLocked && deadline && deadline.getTime() <= startOfCurrentDay())
 }
 
 function editGradePeriod(period) {
@@ -1006,8 +989,6 @@ function editGradePeriod(period) {
   periodForm.value = {
     schoolYear: period.schoolYear,
     semester: period.semester,
-    midtermOpens: period.midtermOpens || '',
-    finalsOpens: period.finalsOpens || '',
     submitGradeDeadline: period.submitGradeDeadline || '',
   }
 }
@@ -1029,10 +1010,10 @@ async function saveGradePeriod() {
   const request = editingPeriod
     ? { ...periodForm.value, schoolYear: editingPeriod.schoolYear }
     : {
-        schoolYear: periodForm.value.schoolYear,
-        semester: periodForm.value.semester,
-        midtermOpens: periodForm.value.midtermOpens,
-      }
+      schoolYear: periodForm.value.schoolYear,
+      semester: periodForm.value.semester,
+      submitGradeDeadline: periodForm.value.submitGradeDeadline,
+    }
   try {
     const schedule = editingPeriodId.value
       ? await updateGradePeriod(editingPeriodId.value, request)
@@ -1044,8 +1025,6 @@ async function saveGradePeriod() {
     periodForm.value = {
       schoolYear: currentAcademicYear.value,
       semester: 'Semester',
-      midtermOpens: '',
-      finalsOpens: '',
       submitGradeDeadline: '',
     }
   } catch (error) {
@@ -2495,7 +2474,7 @@ async function saveGradePeriod() {
 
 .period-fields {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
@@ -2640,7 +2619,7 @@ async function saveGradePeriod() {
 
 .save-period-button {
   align-self: end;
-  grid-column: 6;
+  grid-column: 4;
   grid-row: 1;
   justify-self: stretch;
   padding-top: 0;
@@ -2668,7 +2647,7 @@ async function saveGradePeriod() {
 
 .active-schedule-row {
   display: grid;
-  grid-template-columns: 1fr auto auto auto;
+  grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 14px;
   padding: 10px 14px;

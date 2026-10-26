@@ -62,27 +62,14 @@ class GradeSheetController extends Controller
             abort_if(!$gradePeriod, 422, 'The Registrar has not set a grade period for this semester.');
         }
 
-        if ($gradePeriod && $period !== 'both') {
-            $periodLocked = $period === 'midterm' ? $gradePeriod->midterm_locked : $gradePeriod->finals_locked;
-            $opens = $period === 'midterm' ? $gradePeriod->midterm_opens : $gradePeriod->finals_opens;
-            abort_if($periodLocked, 422, 'The Registrar has locked this grading period.');
-            abort_if(!$opens || $opens->toDateString() > now('Asia/Manila')->toDateString(), 422, 'This grading period is not open yet.');
-        }
-
         if ($period === 'both') {
             if ($gradePeriod) {
+                abort_if($gradePeriod->submit_grade_locked, 422, 'The Registrar has locked grade submission for this semester.');
                 abort_if(
                     !$gradePeriod->submit_grade_deadline,
                     422,
                     'The Registrar has not set a final-grade submission deadline for this semester.',
                 );
-                if ($gradePeriod->midterm_locked && $gradePeriod->finals_locked) {
-                    abort_if(
-                        today()->gt($gradePeriod->submit_grade_deadline),
-                        422,
-                        'The final-grade submission deadline has passed.',
-                    );
-                }
             }
         }
 

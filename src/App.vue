@@ -27,7 +27,12 @@ async function openDevDashboard(role: 'student' | 'professor' | 'registrar') {
       body: JSON.stringify(devCredentials[role]),
     })
     const payload = await parseApiResponse<{ token: string; user: Record<string, unknown>; message?: string }>(response)
-    if (!response.ok) throw new Error(payload.message || 'Unable to open development dashboard.')
+    if (!response.ok) {
+      const message = response.status === 404
+        ? 'Backend API is not connected. Set VITE_API_URL in Vercel to your deployed Laravel API URL, then redeploy.'
+        : payload.message || 'Unable to open development dashboard.'
+      throw new Error(message)
+    }
     localStorage.setItem('auth_token', payload.token)
     devUser.value = payload.user
     devRole.value = role

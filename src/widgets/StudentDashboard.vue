@@ -171,7 +171,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { getGradeSchedules, getPublishedGrades } from '../services/dataService'
 import { sameAcademicPeriod } from '../services/academicPeriod'
-import { formatSystemDate, getSystemDateParts, getSystemDateString, parseSystemDate } from '../services/systemTime'
+import { getSystemDateParts } from '../services/systemTime'
 const sidebarOpen = ref(false)
 function toggleSidebar(){ sidebarOpen.value = !sidebarOpen.value }
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
@@ -224,12 +224,7 @@ function semesterLockMessageFor(period) {
   const gradePeriod = gradeSchedules.value.find(schedule =>
     schedule.yearLevel === 'Grade Period' && sameAcademicPeriod(schedule.semester, schedule.schoolYear, period),
   )
-  const opensOn = gradePeriod?.midtermOpens
-  if (!opensOn) return 'The registrar has not set the opening date for this semester yet.'
-  const openDate = parseSystemDate(opensOn)
-  if (!openDate) return 'The registrar has not set a valid opening date for this semester yet.'
-  if (opensOn <= getSystemDateString(currentTime.value)) return ''
-  return `This semester opens on ${formatSystemDate(openDate, { month: 'long', day: 'numeric', year: 'numeric' })}.`
+  return gradePeriod ? '' : 'The registrar has not set a grade period for this semester yet.'
 }
 const semesterLockMessage = computed(() => semesterLockMessageFor(semester.value))
 function isSemesterOptionLocked(period) {

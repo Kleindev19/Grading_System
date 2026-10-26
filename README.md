@@ -173,3 +173,57 @@ php artisan test
 ```
 
 Never commit .env files, database credentials, or uploaded storage files.
+
+## Deploy Vercel frontend with Laravel Cloud API
+
+Vercel hosts the Vue frontend. Laravel and its database must run on a PHP-capable backend host; this project is configured for Laravel Cloud with PostgreSQL. The Vercel `/api` path is not a Laravel backend.
+
+### 1. Deploy the Laravel API
+
+In Laravel Cloud, connect this GitHub repository and create a Laravel application using `backend` as its application/root directory. Create and attach a PostgreSQL database in the same region, then deploy the application. Use the Laravel Cloud environment's database connection values; do not use the local SQLite database in production.
+
+Set these Laravel Cloud environment variables:
+
+```text
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://<your-laravel-cloud-domain>
+CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app
+SEED_DEMO_ACCOUNTS=false
+```
+
+Generate a unique `APP_KEY` for this backend and set it as a Laravel Cloud secret. Set `DB_CONNECTION=pgsql` and the database host, port, database name, username, and password from the attached PostgreSQL resource. Keep all secrets in Laravel Cloud, never in Vercel or frontend code.
+
+Run `php artisan migrate --force` against the hosted database after connecting it. Confirm the API health check at `https://<your-laravel-cloud-domain>/up`.
+
+### 2. Connect Vercel to the API
+
+In the Vercel project settings, add this environment variable for Production:
+
+```text
+VITE_API_URL=https://<your-laravel-cloud-domain>
+```
+
+Use the backend origin only; the frontend automatically adds `/api`. Redeploy the Vercel project after saving the variable. The API must allow the exact Vercel origin in `CORS_ALLOWED_ORIGINS`. If using another Vercel domain, include each exact origin as a comma-separated value in Laravel Cloud and redeploy the backend.
+
+### 3. Create demo logins
+
+Only use the public demo accounts with a separate database containing demo data, never a database with real student records. After migrations finish, set `SEED_DEMO_ACCOUNTS=true` in the Laravel Cloud environment temporarily, then run:
+
+```sh
+php artisan db:seed --class=DemoAccountsSeeder --force
+```
+
+Set `SEED_DEMO_ACCOUNTS=false` again after seeding. The seeder creates a student profile as well as the three verified accounts, so no email service is needed for demo login:
+
+| Role | Username | Password |
+| --- | --- | --- |
+| Student | `23-00001` | `Password123!` |
+| Professor | `mock.professor` | `Password123!` |
+| Registrar | `mock.registrar` | `Password123!` |
+
+These are public demo credentials and must never be reused for real accounts or real student records. Demo Access uses the professor, registrar, and student usernames above.
+
+### 4. Verify login
+
+Open the Vercel site and try each Demo Access role. If login fails, check that the Vercel deployment has the correct `VITE_API_URL`, Laravel Cloud is deployed, migrations and demo seeding completed, and the API's CORS origin exactly matches the Vercel URL. A `404` at the Vercel site's `/api/login` means the frontend is still calling Vercel instead of the Laravel API.
