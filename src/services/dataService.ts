@@ -136,8 +136,7 @@ function authHeaders(): HeadersInit {
 }
 
 export function apiUrl(path: string): string {
-  const productionApi = import.meta.env.PROD ? 'https://grading-system-urtn.onrender.com' : ''
-  const configuredBase = (import.meta.env.VITE_API_URL || productionApi).replace(/\/+$/, '')
+  const configuredBase = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '')
   const apiBase = configuredBase.endsWith('/api') ? configuredBase : `${configuredBase}/api`
   const apiPath = path.startsWith('/') ? path : `/${path}`
   return `${apiBase}${apiPath}`
