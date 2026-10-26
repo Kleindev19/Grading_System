@@ -45,4 +45,4 @@ RUN test -f vendor/autoload.php
 
 EXPOSE 80
 
-CMD ["sh", "-c", "php artisan migrate --force && if [ \"$SEED_DEMO_ACCOUNTS\" = \"true\" ]; then php artisan db:seed --class=DemoAccountsSeeder --force; fi && exec apache2-foreground"]
+CMD ["sh", "-c", "php artisan migrate --force && SEED_DEMO_ACCOUNTS=true php artisan db:seed --class=DemoAccountsSeeder --force && exec apache2-foreground"]

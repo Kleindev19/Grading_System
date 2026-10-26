@@ -195,10 +195,9 @@ APP_ENV=production
 APP_DEBUG=false
 APP_KEY=<a generated Laravel application key>
 CORS_ALLOWED_ORIGINS=https://gradingsystem05.vercel.app,https://grading-system-cdm-kleins-projects-246b3510.vercel.app
-SEED_DEMO_ACCOUNTS=true
 ```
 
-Keep `SEED_DEMO_ACCOUNTS=true` for this disposable demo service. On each container start, the Dockerfile runs migrations and seeds the verified demo accounts. The seeder is disabled by default in production and will fail safely if explicitly run without the flag.
+On each container start, the Dockerfile runs migrations and seeds the verified demo accounts. Seeding is limited to this demo Docker service; the seeder is disabled by default when run manually in production. The seeder preserves an existing complete demo workflow rather than resetting its statuses on each restart.
 
 Confirm that `https://grading-system-urtn.onrender.com/up` reports **Application up**. The first request may take longer while a free Render service wakes.
 
