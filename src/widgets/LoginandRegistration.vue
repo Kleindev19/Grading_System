@@ -287,10 +287,12 @@ onMounted(restoreSession)
   position: relative;
   isolation: isolate;
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 24px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: linear-gradient(135deg, #edf5ef 0%, #f8fbf7 52%, #e7f0df 100%);
   color: #173025;
   font-family: 'Trebuchet MS', Arial, Helvetica, sans-serif;

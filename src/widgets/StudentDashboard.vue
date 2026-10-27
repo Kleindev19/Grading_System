@@ -351,11 +351,12 @@ function signOut(){
 }
 
 .student-root {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #ffffff;
   color: #0a0a0a;
@@ -556,6 +557,8 @@ function signOut(){
   position: relative;
   z-index: 1;
   flex: 1;
+  min-width: 0;
+  min-height: 0;
   overflow: auto;
   padding: 16px 17px 30px;
   background: rgba(255, 255, 255, 0.94);

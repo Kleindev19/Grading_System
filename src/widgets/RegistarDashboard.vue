@@ -1,6 +1,7 @@
 <template>
   <div class="registrar-root">
-    <aside class="registrar-sidebar">
+    <div v-if="sidebarOpen" class="registrar-sidebar-overlay" @click="sidebarOpen = false"></div>
+    <aside class="registrar-sidebar" :class="{ open: sidebarOpen }">
       <div class="seal-block">
         <img :src="colegioLogo" alt="Colegio de Montalban" />
       </div>
@@ -13,7 +14,7 @@
           :class="{ active: currentView === 'institute' || currentView === 'management' }"
           type="button"
           aria-label="Grade management"
-          @click="currentView = 'institute'"
+          @click="currentView = 'institute'; sidebarOpen = false"
         >
           <span v-if="currentView === 'institute' || currentView === 'management'" class="active-bar"></span>
           <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -23,13 +24,13 @@
             <rect x="15" y="15" width="5" height="5" />
           </svg>
         </button>
-        <button class="nav-button" :class="{ active: currentView === 'students' }" type="button" aria-label="Student repository" @click="openRepository">
+        <button class="nav-button" :class="{ active: currentView === 'students' }" type="button" aria-label="Student repository" @click="openRepository(); sidebarOpen = false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
           </svg>
         </button>
-        <button class="nav-button" :class="{ active: currentView === 'professors' }" type="button" aria-label="Professor repository" @click="openProfessorRepository">
+        <button class="nav-button" :class="{ active: currentView === 'professors' }" type="button" aria-label="Professor repository" @click="openProfessorRepository(); sidebarOpen = false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="4" y="4" width="16" height="16" rx="2" />
             <circle cx="12" cy="10" r="2.5" />
@@ -59,6 +60,9 @@
 
     <main class="registrar-page">
       <header class="registrar-header">
+        <button class="registrar-menu-button" type="button" aria-label="Open menu" :aria-expanded="sidebarOpen" @click="sidebarOpen = !sidebarOpen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
+        </button>
         <h1>GRADE MANAGEMENT</h1>
       </header>
 
@@ -485,6 +489,7 @@ import iteLogo from '../logo/ite-logo.png'
 const props = defineProps({ user: { type: Object, default: null } })
 defineEmits(['signout'])
 
+const sidebarOpen = ref(false)
 const currentView = ref('institute')
 const selectedInstitute = ref(null)
 const search = ref('')
@@ -1040,11 +1045,12 @@ async function saveGradePeriod() {
 }
 
 .registrar-root {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
-  width: 100vw;
+  width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: #ffffff;
   color: #000000;
@@ -1062,6 +1068,33 @@ async function saveGradePeriod() {
   background: linear-gradient(180deg, #124a29 0%, #124b27 58%, #72a900 100%);
   color: #ffffff;
   z-index: 5;
+}
+
+.registrar-sidebar-overlay {
+  display: none;
+}
+
+.registrar-menu-button {
+  display: none;
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #155423;
+  cursor: pointer;
+}
+
+.registrar-menu-button svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
 }
 
 .seal-block img {
@@ -3234,8 +3267,33 @@ async function saveGradePeriod() {
 }
 
 @media (max-width: 820px) {
-  .registrar-root {
+  .registrar-sidebar {
     position: fixed;
+    inset: 0 auto 0 0;
+    height: 100vh;
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .registrar-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .registrar-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    display: block;
+    background: rgba(0, 0, 0, 0.42);
+    z-index: 4;
+  }
+
+  .registrar-menu-button {
+    display: grid;
+  }
+
+  .registrar-header {
+    gap: 8px;
   }
 
   .registrar-sidebar {
