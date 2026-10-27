@@ -2302,4 +2302,12 @@ onUnmounted(() => {
     min-width: 0;
   }
 }
+
+.grade-table tbody td:not(.name-cell),
+.grade-table input,
+.summary-box td {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}
 </style>

@@ -3106,6 +3106,14 @@ async function saveGradePeriod() {
   text-align: center;
 }
 
+.review-table td:first-child,
+.review-table td:nth-child(n + 3):nth-child(-n + 6),
+.review-summary strong {
+  font-family: "Segoe UI", Arial, sans-serif;
+  font-variant-numeric: lining-nums tabular-nums;
+  font-feature-settings: "lnum" 1, "tnum" 1;
+}
+
 .passed-pill {
   display: inline-flex;
   align-items: center;
