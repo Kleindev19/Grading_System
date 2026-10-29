@@ -88,6 +88,20 @@ export interface Student {
   status?: string
 }
 
+export interface StudentPublishedGrade {
+  id: number
+  code: string
+  subject: string
+  semester: string
+  professor: string
+  units: number
+  midterm: string
+  finals: string
+  finalGrade: string
+  gradePoint: string
+  remarks: string
+}
+
 export interface Professor {
   id: number
   name: string
@@ -291,13 +305,6 @@ export async function lockGradeSubmission(id: number): Promise<GradeSchedule> {
   return payload.schedule
 }
 
-export async function unlockGradeSubmission(id: number): Promise<GradeSchedule> {
-  const payload = await apiRequest<{ schedule: GradeSchedule }>(`/grade-periods/${id}/unlock-submission`, {
-    method: 'PATCH',
-  })
-  return payload.schedule
-}
-
 export async function deleteGradePeriod(id: number): Promise<void> {
   await apiRequest<{ message: string }>(`/grade-periods/${id}`, { method: 'DELETE' })
 }
@@ -305,6 +312,11 @@ export async function deleteGradePeriod(id: number): Promise<void> {
 export async function getStudents(): Promise<Student[]> {
   const payload = await apiRequest<{ students: Student[] }>('/students')
   return payload.students
+}
+
+export async function getStudentGrades(studentId: string): Promise<StudentPublishedGrade[]> {
+  const payload = await apiRequest<{ grades: StudentPublishedGrade[] }>(`/students/${encodeURIComponent(studentId)}/grades`)
+  return payload.grades
 }
 
 export async function getProfessors(): Promise<Professor[]> {

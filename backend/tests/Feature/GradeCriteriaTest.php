@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\GradeSchedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -170,6 +171,60 @@ class GradeCriteriaTest extends TestCase
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors(['criteria.midterm']);
+    }
+
+    public function test_locked_grade_period_rejects_grade_draft_and_criteria_changes(): void
+    {
+        $professor = User::factory()->create([
+            'role' => 'professor',
+            'api_token' => 'locked-period-professor-token',
+        ]);
+        $schoolYear = now()->year . '-' . (now()->year + 1);
+        GradeSchedule::create([
+            'school_year' => $schoolYear,
+            'semester' => '1st Semester',
+            'year_level' => 'Grade Period',
+            'courses' => [],
+            'submit_grade_deadline' => today()->toDateString(),
+            'submit_grade_locked' => true,
+            'status' => 'Released',
+            'created_by' => User::factory()->create(['role' => 'registrar'])->id,
+        ]);
+        $course = [
+            'code' => 'LOCKED101',
+            'section' => 'BSIT - 1A',
+            'semester' => "1st Semester {$schoolYear}",
+        ];
+
+        $this->withToken($professor->api_token)
+            ->putJson('/api/grade-drafts', [
+                ...$course,
+                'subject' => 'Locked Course',
+                'units' => 3,
+                'assessment_headers' => ['Q1'],
+                'student_records' => [[
+                    'id' => 'LOCKED-STUDENT',
+                    'name' => 'Locked Student',
+                    'scores' => [
+                        'midterm' => ['Q1' => 90],
+                        'finals' => ['Q1' => 90],
+                    ],
+                ]],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The Registrar has locked grade submission for this semester.');
+
+        $this->withToken($professor->api_token)
+            ->putJson('/api/grade-criteria', [
+                ...$course,
+                'criteria' => [
+                    'midterm' => ['quiz' => ['weight' => 100, 'maxScore' => 100]],
+                    'finals' => ['quiz' => ['weight' => 100, 'maxScore' => 100]],
+                ],
+                'assessment_headers' => ['Q1'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonPath('message', 'The Registrar has locked grade submission for this semester.');
     }
 
     public function test_assessment_max_score_cannot_exceed_one_hundred(): void

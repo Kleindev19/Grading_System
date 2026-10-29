@@ -95,7 +95,12 @@ class GradeScheduleController extends Controller
             'submitGradeDeadline' => ['required', 'date'],
         ]);
         abort_if(
-            !$this->canCreateAcademicYear($data['schoolYear']),
+            $this->gradePeriodExists($data['schoolYear'], $data['semester']),
+            422,
+            "A Grade Period already exists for {$data['semester']}, A.Y. {$data['schoolYear']}. Edit the existing schedule instead.",
+        );
+        abort_if(
+            !$this->canCreateAcademicYear($data['schoolYear'], $data['semester']),
             422,
             $this->academicYearAvailabilityMessage($data['schoolYear']),
         );
@@ -103,11 +108,6 @@ class GradeScheduleController extends Controller
             !$this->canCreateSemester($data['schoolYear'], $data['semester']),
             422,
             $this->semesterAvailabilityMessage($data['schoolYear']),
-        );
-        abort_if(
-            $this->gradePeriodExists($data['schoolYear'], $data['semester']),
-            422,
-            "A Grade Period already exists for {$data['semester']}, A.Y. {$data['schoolYear']}. Edit the existing schedule instead.",
         );
 
         $schedule = GradeSchedule::create([
@@ -140,10 +140,10 @@ class GradeScheduleController extends Controller
             && $data['semester'] === $schedule->semester;
         $deadlineChanged = $data['submitGradeDeadline'] !== $submitGradeDeadline;
 
+        $completedPeriod = $schedule->submit_grade_locked
+            || ($submitGradeDeadline !== null && $submitGradeDeadline <= now('Asia/Manila')->toDateString());
         abort_if(
-            ($schedule->submit_grade_locked
-                || ($submitGradeDeadline !== null && $submitGradeDeadline <= now('Asia/Manila')->toDateString()))
-                && $deadlineChanged,
+            $completedPeriod && ($deadlineChanged || !$isUnchangedPeriod),
             422,
             'Completed academic years cannot be edited.',
         );
@@ -184,17 +184,6 @@ class GradeScheduleController extends Controller
         return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
     }
 
-    public function unlockSubmission(Request $request, GradeSchedule $schedule): JsonResponse
-    {
-        abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can unlock grade submission.');
-        abort_unless($schedule->year_level === 'Grade Period', 404);
-        abort_if(!$schedule->submit_grade_locked, 422, 'Grade submission is already unlocked.');
-
-        $schedule->update(['submit_grade_locked' => false]);
-
-        return response()->json(['schedule' => $this->serialize($schedule->fresh())]);
-    }
-
     public function destroyPeriod(Request $request, GradeSchedule $schedule): JsonResponse
     {
         abort_unless($request->attributes->get('auth_user')->role === 'registrar', 403, 'Only registrars can delete grade periods.');
@@ -226,7 +215,7 @@ class GradeScheduleController extends Controller
         ];
     }
 
-    private function canCreateAcademicYear(string $schoolYear): bool
+    private function canCreateAcademicYear(string $schoolYear, string $semester): bool
     {
         if (!preg_match('/^(\d{4})-(\d{4})$/', $schoolYear, $matches)
             || (int) $matches[2] !== (int) $matches[1] + 1) {
@@ -247,10 +236,22 @@ class GradeScheduleController extends Controller
             ->first();
 
         if (!$previousFinalPeriod) {
-            return $startYear === $currentYear;
+            if ($startYear !== $currentYear) {
+                return false;
+            }
+
+            if ($semester === '2nd Semester') {
+                return true;
+            }
+
+            return !GradeSchedule::query()
+                ->where('year_level', 'Grade Period')
+                ->exists();
         }
 
-        return (bool) $previousFinalPeriod->submit_grade_locked;
+        return (bool) $previousFinalPeriod->submit_grade_locked
+            && $previousFinalPeriod->submit_grade_deadline !== null
+            && $previousFinalPeriod->submit_grade_deadline->toDateString() <= now('Asia/Manila')->toDateString();
     }
 
     private function canCreateSemester(string $schoolYear, string $semester): bool

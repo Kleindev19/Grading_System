@@ -25,6 +25,19 @@ class GradeSchedule extends Model
         ];
     }
 
+    protected static function booted(): void
+    {
+        static::updating(function (GradeSchedule $schedule): void {
+            $isAlreadyLocked = (bool) $schedule->newQuery()
+                ->whereKey($schedule->getKey())
+                ->value('submit_grade_locked');
+
+            if ($isAlreadyLocked && !$schedule->submit_grade_locked) {
+                $schedule->submit_grade_locked = true;
+            }
+        });
+    }
+
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');

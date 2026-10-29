@@ -24,7 +24,7 @@
             <rect x="15" y="15" width="5" height="5" />
           </svg>
         </button>
-        <button class="nav-button" :class="{ active: currentView === 'students' }" type="button" aria-label="Student repository" @click="openRepository(); sidebarOpen = false">
+        <button class="nav-button" :class="{ active: currentView === 'students' }" type="button" aria-label="Student repository" :title="selectedInstitute ? `Student repository - ${selectedInstitute.short}` : 'Select an institute first'" :disabled="!selectedInstitute" @click="openRepository(); sidebarOpen = false">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" />
@@ -229,9 +229,7 @@
                   <strong>{{ group.label }}</strong>
                   <span>{{ group.sheets.length }} approved grade sheet{{ group.sheets.length === 1 ? '' : 's' }} waiting for a release date</span>
                   <form @submit.prevent="addRelease(group)">
-                    <input v-model="scheduleDraft(group).schoolYear" type="text" aria-label="School Year" />
-                    <select v-model="scheduleDraft(group).semester" aria-label="Semester"><option>Semester</option><option>1st Semester</option><option>2nd Semester</option></select>
-                    <select v-model="scheduleDraft(group).yearLevel" aria-label="Year Level"><option>Year</option><option>1st Year</option><option>2nd Year</option><option>3rd Year</option><option>4th Year</option></select>
+                    <p class="pending-schedule-period">A.Y. {{ group.schoolYear }} &bull; {{ group.semester }} &bull; {{ group.yearLevel }}</p>
                     <input v-model="scheduleDraft(group).releasedDate" type="date" aria-label="Released Date" required />
                     <button class="add-release-button pending-release-button" type="submit" :disabled="!canReleaseGroup(group)">Submit Schedule</button>
                   </form>
@@ -288,8 +286,8 @@
               <form class="period-form" @submit.prevent="saveGradePeriod">
                 <p class="period-form-title">&#128197; {{ editingPeriodId ? 'Edit Grade Period' : 'Set Grade Period' }}</p>
                 <div class="period-fields">
-                  <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (previous 2nd Semester submission not locked)' }}</option></select></div>
-                  <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="isGradePeriodTaken('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="isGradePeriodTaken('2nd Semester') || !canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (lock 1st Semester submission after deadline first)' }}</option></select></div>
+                  <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (lock previous 2nd Semester after its deadline first)' }}</option></select></div>
+                  <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="!canCreateGradePeriodSemester('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="!canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (lock 1st Semester after its deadline first)' }}</option></select></div>
                   <div class="period-date-field"><label for="submit-grade-deadline">Submit of Grade Deadline</label><input id="submit-grade-deadline" v-model="periodForm.submitGradeDeadline" type="date" :disabled="Boolean(editingGradePeriod && isGradePeriodReadOnly(editingGradePeriod))" required /></div>
                   <button class="save-period-button" type="submit"><span v-if="!editingPeriodId" aria-hidden="true">&#128190;</span>{{ editingPeriodId ? 'Update Grade' : 'Save Grade Period' }}</button>
                 </div>
@@ -297,8 +295,8 @@
               <section class="active-schedules">
                 <h4>Active Schedules</h4>
                 <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
-                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>Midterm and Finals are open &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
-                  <div class="period-stage-status"><button type="button" class="complete-period-button" :class="{ 'submission-locked': period.submitGradeLocked }" :disabled="!period.submitGradeLocked && !canLockGradeSubmission(period)" :title="gradeSubmissionLockTitle(period)" @click="openGradeSubmissionConfirmation(period)"><span class="lock-checkbox" :class="{ checked: period.submitGradeLocked }" aria-hidden="true"><span v-if="period.submitGradeLocked">&#10003;</span></span><span>{{ period.submitGradeLocked ? 'Unlock Submit of Grade' : 'Lock Submit of Grade' }}</span></button></div>
+                  <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>{{ period.submitGradeLocked ? 'Midterm and Finals are view-only for professors' : 'Midterm and Finals are open' }} &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
+                  <div class="period-stage-status"><button type="button" class="complete-period-button" :class="{ 'submission-locked': period.submitGradeLocked }" :disabled="period.submitGradeLocked || !canLockGradeSubmission(period)" :title="gradeSubmissionLockTitle(period)" @click="openGradeSubmissionConfirmation(period)"><span class="lock-checkbox" :class="{ checked: period.submitGradeLocked }" aria-hidden="true"><span v-if="period.submitGradeLocked">&#10003;</span></span><span>{{ period.submitGradeLocked ? 'Locked Permanently' : 'Lock Submit of Grade' }}</span></button></div>
                   <div class="period-actions"><button type="button" class="edit-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Edit grade period'" @click="editGradePeriod(period)">Edit</button><button type="button" class="remove-period-button" :disabled="isGradePeriodReadOnly(period)" :title="isGradePeriodReadOnly(period) ? 'The submission deadline has passed.' : 'Remove grade period'" @click="removeGradePeriod(period)">Remove</button></div>
                 </div>
                 <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
@@ -321,7 +319,7 @@
             <aside class="repository-sidebar">
               <input v-model="repositorySearch" class="repository-search" placeholder="Search student name or ID..." />
               <div class="repository-filters">
-                <label>Institute<select v-model="repositoryInstitute"><option value="">All Institute</option><option value="ICS">ICS</option><option value="IBE">IBE</option><option value="ITE">ITE</option></select></label>
+                <label>Institute<select :value="selectedInstitute.short" disabled><option :value="selectedInstitute.short">{{ selectedInstitute.short }}</option></select></label>
                 <label>Course<select v-model="repositoryCourse"><option value="">All Course</option><option v-for="course in repositoryCourses" :key="course" :value="course">{{ course }}</option></select></label>
                 <label>Year Level<select v-model="repositoryYear"><option value="">Year</option><option v-for="year in repositoryYears" :key="year" :value="year">{{ year }}</option></select></label>
                 <label>Section<select v-model="repositorySection"><option value="">All Section</option><option v-for="section in repositorySections" :key="section" :value="section">{{ section }}</option></select></label>
@@ -330,9 +328,9 @@
               </div>
               <div class="repository-student-list">
                 <small>Students ({{ filteredRepositoryStudents.length }})</small>
-                <template v-for="group in repositoryGroups" :key="`${group.institute}-${group.section}`">
+                <template v-for="group in repositoryGroups" :key="`${group.institute}-${group.course}-${group.year}-${group.section}`">
                   <strong class="repository-group-heading">{{ group.institute }} - {{ group.course }} {{ yearNumber(group.year) }}-{{ group.section }}</strong>
-                  <button v-for="student in group.students" :key="student.student_id" type="button" :class="{ selected: selectedRepositoryStudentId === student.student_id }" @click="selectedRepositoryStudentId = student.student_id">
+                  <button v-for="student in group.students" :key="student.student_id" type="button" :class="{ selected: String(selectedRepositoryStudent?.student_id) === String(student.student_id) }" @click="selectRepositoryStudent(student)">
                     <strong>{{ student.name }}</strong><span>{{ student.student_id }} &bull; {{ student.course || 'Course not set' }} {{ yearNumber(student.year_level) }}-{{ student.section || '-' }}</span><b>{{ student.status || 'Active' }}</b>
                   </button>
                 </template>
@@ -341,12 +339,16 @@
             </aside>
             <section v-if="selectedRepositoryStudent" class="repository-detail">
               <header><div><h3>{{ selectedRepositoryStudent.name }}</h3><p>{{ selectedRepositoryStudent.student_id }} &bull; {{ selectedRepositoryStudent.institute || '-' }} &bull; {{ selectedRepositoryStudent.course || 'Course not set' }} {{ yearNumber(selectedRepositoryStudent.year_level) }}-{{ selectedRepositoryStudent.section || '-' }}</p></div><span>Status: <b>{{ selectedRepositoryStudent.status || 'Active' }}</b></span></header>
-              <div v-for="semester in repositorySemesters" :key="semester" class="repository-semester">
-                <h4>{{ semester }} - {{ selectedRepositoryStudent.year_level || '1st Year' }}</h4>
-                <div class="repository-grade-header"><strong>SUBJECT CODE</strong><strong>MIDTERM</strong><strong>FINALS</strong><strong>FINAL AVERAGE</strong><strong>GRADE POINT</strong><strong>REMARKS</strong></div>
-                <div v-for="sheet in repositoryGradesBySemester(selectedRepositoryStudent.student_id, semester)" :key="sheet.id" class="repository-grade-row"><strong>{{ sheet.code }}</strong><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.midterm || '-' }}</span><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.finals || '-' }}</span><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.finalGrade || '-' }}</span><b>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.gradePoint || '-' }}</b><span>{{ gradeRecord(sheet, selectedRepositoryStudent.student_id)?.remarks || '-' }}</span></div>
-                <p v-if="repositoryGradesBySemester(selectedRepositoryStudent.student_id, semester).length === 0" class="repository-empty">No published grades.</p>
-              </div>
+              <p v-if="repositoryGradesLoading" class="repository-empty">Loading published grades...</p>
+              <p v-else-if="repositoryGradesError" class="repository-empty" role="alert">{{ repositoryGradesError }}</p>
+              <template v-else>
+                <div v-for="semester in repositorySemesters" :key="semester" class="repository-semester">
+                  <h4>{{ semester }} - {{ selectedRepositoryStudent.year_level || '1st Year' }}</h4>
+                  <div class="repository-grade-header"><strong>SUBJECT CODE</strong><strong>MIDTERM</strong><strong>FINALS</strong><strong>FINAL AVERAGE</strong><strong>GRADE POINT</strong><strong>REMARKS</strong></div>
+                  <div v-for="grade in repositoryGradesBySemester(semester)" :key="grade.id" class="repository-grade-row"><strong>{{ grade.code }}</strong><span>{{ grade.midterm || '-' }}</span><span>{{ grade.finals || '-' }}</span><span>{{ grade.finalGrade || '-' }}</span><b>{{ grade.gradePoint || '-' }}</b><span>{{ grade.remarks || '-' }}</span></div>
+                  <p v-if="repositoryGradesBySemester(semester).length === 0" class="repository-empty">No published grades.</p>
+                </div>
+              </template>
             </section>
             <p v-else class="repository-empty">Select a student to view grades.</p>
           </div>
@@ -473,14 +475,15 @@
         </div>
       </section>
     </div>
-    <Teleport to="body"><div v-if="submissionLockConfirmation" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeGradeSubmissionLockConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="period-lock-confirmation-title"><h2 id="period-lock-confirmation-title">Are you sure you want to {{ submissionLockConfirmation.action }} the submission of grade?</h2><p v-if="submissionLockConfirmation.action === 'lock'">This will lock grade submission for {{ submissionLockConfirmation.period.semester }}, A.Y. {{ submissionLockConfirmation.period.schoolYear }}. Professors will no longer be able to submit or update grades for this period.</p><p v-else>This will unlock grade submission for {{ submissionLockConfirmation.period.semester }}, A.Y. {{ submissionLockConfirmation.period.schoolYear }}. Professors will be able to submit or update grades for this period again.</p><p v-if="submissionLockError" class="submission-confirmation-error" role="alert">{{ submissionLockError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isLockingGradeSubmission" @click="closeGradeSubmissionLockConfirmation">Go Back</button><button type="button" :disabled="isLockingGradeSubmission" @click="confirmUpdateGradeSubmissionLock">{{ isLockingGradeSubmission ? (submissionLockConfirmation.action === 'lock' ? 'Locking...' : 'Unlocking...') : (submissionLockConfirmation.action === 'lock' ? 'Lock Submit of Grade' : 'Unlock Submit of Grade') }}</button></div></section></div></Teleport>
+    <Teleport to="body"><div v-if="submissionLockConfirmation" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeGradeSubmissionLockConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="period-lock-confirmation-title"><h2 id="period-lock-confirmation-title">Are you sure you want to lock the submission of grade?</h2><p>This will lock grade submission for {{ submissionLockConfirmation.period.semester }}, A.Y. {{ submissionLockConfirmation.period.schoolYear }}. Professors will be able to view Midterm and Finals grades but will no longer be able to edit or submit them.</p><p v-if="submissionLockError" class="submission-confirmation-error" role="alert">{{ submissionLockError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isLockingGradeSubmission" @click="closeGradeSubmissionLockConfirmation">Go Back</button><button type="button" :disabled="isLockingGradeSubmission" @click="confirmUpdateGradeSubmissionLock">{{ isLockingGradeSubmission ? 'Locking...' : 'Lock Submit of Grade' }}</button></div></section></div></Teleport>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
-import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudents, lockGradeSubmission, releaseGradeSchedule, unlockGradeSubmission, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
+import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudentGrades, getStudents, lockGradeSubmission, releaseGradeSchedule, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
 import { formatSystemDate, getSystemDateParts, getSystemDateString, getSystemDayStart, parseSystemDate } from '../services/systemTime'
+import { parseAcademicPeriod } from '../services/academicPeriod'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import ibeLogo from '../logo/ibe-logo.png'
 import icsLogo from '../logo/ics-logo.png'
@@ -584,24 +587,34 @@ const filteredProfessors = computed(() => {
   })
 })
 const repositorySearch = ref('')
-const repositoryInstitute = ref('')
 const repositoryCourse = ref('')
 const repositoryYear = ref('')
 const repositorySection = ref('')
 const repositoryLetter = ref('')
 const selectedRepositoryStudentId = ref('')
+const repositoryGrades = ref([])
+const repositoryGradesLoading = ref(false)
+const repositoryGradesError = ref('')
+let repositoryGradesRequest = 0
 const repositoryYears = ['1st Year', '2nd Year', '3rd Year', '4th Year']
-const repositorySections = ['A', 'B', 'C', 'D']
 const lastNameGroups = ['A - E', 'F - J', 'K - O', 'P - T', 'U - Z']
 const repositorySemesters = ['1st Semester', '2nd Semester']
-const repositoryCourses = computed(() => [...new Set(students.value.map(student => student.course).filter(Boolean))])
+const instituteRepositoryStudents = computed(() => {
+  const institute = selectedInstitute.value?.short
+  if (!institute) return []
+  return students.value.filter(student => String(student.institute || '').trim().toUpperCase() === institute)
+})
+const repositoryCourses = computed(() => [...new Set(instituteRepositoryStudents.value.map(student => student.course).filter(Boolean))])
+const repositorySections = computed(() => [...new Set(instituteRepositoryStudents.value
+  .map(student => student.section?.split('-').pop()?.toUpperCase())
+  .filter(Boolean))].sort())
 const filteredRepositoryStudents = computed(() => {
   const query = repositorySearch.value.trim().toLowerCase()
-  return students.value.filter(student => {
+  return instituteRepositoryStudents.value.filter(student => {
     const nameInitial = student.name.trim().charAt(0).toUpperCase()
     const [start, end] = repositoryLetter.value.split('-').map(part => part.trim())
     const matchesLetter = !repositoryLetter.value || nameInitial >= start && nameInitial <= end
-    return (!query || `${student.student_id} ${student.name}`.toLowerCase().includes(query)) && (!repositoryInstitute.value || student.institute === repositoryInstitute.value) && (!repositoryCourse.value || student.course === repositoryCourse.value) && (!repositoryYear.value || student.year_level === repositoryYear.value) && (!repositorySection.value || student.section?.split('-').pop()?.toUpperCase() === repositorySection.value) && matchesLetter
+    return (!query || `${student.student_id} ${student.name}`.toLowerCase().includes(query)) && (!repositoryCourse.value || student.course === repositoryCourse.value) && (!repositoryYear.value || student.year_level === repositoryYear.value) && (!repositorySection.value || student.section?.split('-').pop()?.toUpperCase() === repositorySection.value) && matchesLetter
   })
 })
 const repositoryGroups = computed(() => {
@@ -617,7 +630,36 @@ const repositoryGroups = computed(() => {
   })
   return [...groups.values()]
 })
-const selectedRepositoryStudent = computed(() => students.value.find(student => student.student_id === selectedRepositoryStudentId.value) || filteredRepositoryStudents.value[0])
+const selectedRepositoryStudent = computed(() => filteredRepositoryStudents.value.find(student => String(student.student_id) === selectedRepositoryStudentId.value) || filteredRepositoryStudents.value[0])
+
+watch(filteredRepositoryStudents, visibleStudents => {
+  if (!visibleStudents.some(student => String(student.student_id) === selectedRepositoryStudentId.value)) {
+    selectedRepositoryStudentId.value = String(visibleStudents[0]?.student_id || '')
+  }
+}, { immediate: true })
+
+watch(selectedRepositoryStudentId, async studentId => {
+  const requestId = ++repositoryGradesRequest
+  repositoryGrades.value = []
+  repositoryGradesError.value = ''
+
+  if (!studentId) {
+    repositoryGradesLoading.value = false
+    return
+  }
+
+  repositoryGradesLoading.value = true
+  try {
+    const grades = await getStudentGrades(studentId)
+    if (requestId === repositoryGradesRequest) repositoryGrades.value = grades
+  } catch (error) {
+    if (requestId === repositoryGradesRequest) {
+      repositoryGradesError.value = error instanceof Error ? error.message : "Unable to load this student's grades."
+    }
+  } finally {
+    if (requestId === repositoryGradesRequest) repositoryGradesLoading.value = false
+  }
+}, { immediate: true })
 
 function isReleaseAvailable(schedule) {
   if (schedule.status !== 'Scheduled') return false
@@ -723,8 +765,22 @@ const scheduledSheetIds = computed(() => new Set(schedules.value.flatMap(schedul
 const pendingScheduleGroups = computed(() => {
   const groups = new Map()
   approvedGradeSheets.value.filter(sheet => !scheduledSheetIds.value.has(sheet.id)).forEach(sheet => {
-    const key = `${sheet.code}-${sheet.section}`
-    if (!groups.has(key)) groups.set(key, { key, label: `${sheet.code} - ${sheet.section}`, sheets: [] })
+    const period = parseAcademicPeriod(sheet.semester)
+    const sectionYear = String(sheet.section || '').split('-').pop()?.match(/^\s*([1-4])/)?.[1]
+    const yearLevel = sectionYear
+      ? `${sectionYear}${sectionYear === '1' ? 'st' : sectionYear === '2' ? 'nd' : sectionYear === '3' ? 'rd' : 'th'} Year`
+      : ''
+    const key = `${sheet.code}-${sheet.section}-${period.schoolYear}-${period.semester}`
+    if (!groups.has(key)) {
+      groups.set(key, {
+        key,
+        label: `${sheet.code} - ${sheet.section}`,
+        schoolYear: period.schoolYear,
+        semester: period.semester.replace(/\b\w/g, character => character.toUpperCase()),
+        yearLevel,
+        sheets: [],
+      })
+    }
     groups.get(key).sheets.push(sheet)
   })
   return [...groups.values()]
@@ -747,8 +803,14 @@ function toggleReleaseYear(label) {
 }
 
 function selectInstitute(institute) {
+  if (selectedInstitute.value?.id !== institute.id) {
+    repositorySearch.value = ''
+    repositoryCourse.value = ''
+    repositoryYear.value = ''
+    repositorySection.value = ''
+    repositoryLetter.value = ''
+  }
   selectedInstitute.value = institute
-  repositoryInstitute.value = institute.short
   currentView.value = 'management'
   activeTab.value = 'approval'
 }
@@ -759,13 +821,15 @@ function backToInstitutes() {
 }
 
 function openRepository() {
-  if (selectedInstitute.value) repositoryInstitute.value = selectedInstitute.value.short
+  if (!selectedInstitute.value) {
+    currentView.value = 'institute'
+    return
+  }
   currentView.value = 'students'
 }
 
 function openProfessorRepository() {
   if (!selectedInstitute.value) selectedInstitute.value = institutes[0]
-  repositoryInstitute.value = selectedInstitute.value.short
   currentView.value = 'professors'
 }
 
@@ -774,20 +838,16 @@ function professorCourse(professor) {
   return sheet?.code || 'No course yet'
 }
 
-function repositoryGrades(studentId) {
-  return gradeSheets.value.filter(sheet => sheet.status === 'Published' && sheet.student_records?.some(record => record.id === studentId))
-}
-
-function repositoryGradesBySemester(studentId, semester) {
-  return repositoryGrades(studentId).filter(sheet => sheet.semester.toLowerCase().includes(semester.toLowerCase().split(' ')[0]))
+function repositoryGradesBySemester(semester) {
+  return repositoryGrades.value.filter(grade => grade.semester.toLowerCase().includes(semester.toLowerCase().split(' ')[0]))
 }
 
 function yearNumber(year) {
   return year?.charAt(0) || ''
 }
 
-function gradeRecord(sheet, studentId) {
-  return sheet.student_records?.find(record => record.id === studentId)
+function selectRepositoryStudent(student) {
+  selectedRepositoryStudentId.value = String(student.student_id)
 }
 
 function openReview(sheet) {
@@ -824,7 +884,7 @@ function scheduleCourseLabel(course) {
 
 function scheduleDraft(group) {
   if (!scheduleDrafts[group.key]) {
-    scheduleDrafts[group.key] = { schoolYear: currentAcademicYear.value, semester: 'Semester', yearLevel: 'Year', releasedDate: '' }
+    scheduleDrafts[group.key] = { releasedDate: '' }
   }
   return scheduleDrafts[group.key]
 }
@@ -839,17 +899,13 @@ function scheduleMatchesInstitute(schedule, institute) {
 
 function canReleaseGroup(group) {
   const draft = scheduleDraft(group)
-  return Boolean(draft.schoolYear.trim() && draft.semester !== 'Semester' && draft.yearLevel !== 'Year' && draft.releasedDate)
+  return Boolean(group.schoolYear && group.semester && group.yearLevel && draft.releasedDate)
 }
 
 async function addRelease(group) {
   const draft = scheduleDraft(group)
-  if (!draft.schoolYear.trim()) {
-    window.alert('Enter a school year before adding the schedule.')
-    return
-  }
-  if (draft.yearLevel === 'Year' || draft.semester === 'Semester') {
-    window.alert('Select a semester and year level before adding the schedule.')
+  if (!group.schoolYear || !group.semester || !group.yearLevel) {
+    window.alert('The approved grade sheet must include a valid school year, semester, and section year before scheduling.')
     return
   }
   if (!draft.releasedDate) {
@@ -858,9 +914,9 @@ async function addRelease(group) {
   }
   try {
     const schedule = await createGradeSchedule({
-      schoolYear: draft.schoolYear.trim(),
-      semester: draft.semester,
-      yearLevel: draft.yearLevel,
+      schoolYear: group.schoolYear,
+      semester: group.semester,
+      yearLevel: group.yearLevel,
       courses: group.sheets.map(sheet => `sheet:${sheet.id}`),
       releasedDate: draft.releasedDate,
     })
@@ -905,13 +961,19 @@ function canLockGradeSubmission(period) {
 }
 
 function gradeSubmissionLockTitle(period) {
-  if (period.submitGradeLocked) return 'Grade submission is locked.'
+  if (period.submitGradeLocked) return 'Grade submission is locked and cannot be unlocked.'
   if (!period.submitGradeDeadline) return 'Set a Submit of Grade Deadline first.'
   if (!canLockGradeSubmission(period)) return `Available on ${period.submitGradeDeadline}.`
   return 'Lock grade submission for this semester.'
 }
 
 function canCreateGradePeriodInYear(schoolYear) {
+  return ['1st Semester', '2nd Semester'].some(semester =>
+    canCreateGradePeriodSemester(semester, schoolYear),
+  )
+}
+
+function canCreateGradePeriodSemester(semester, schoolYear = periodForm.value.schoolYear) {
   const startYear = Number(String(schoolYear).match(/^\d{4}/)?.[0])
   const currentStartYear = Number(currentAcademicYear.value.slice(0, 4))
   if (!Number.isFinite(startYear) || startYear < currentStartYear) return false
@@ -920,16 +982,32 @@ function canCreateGradePeriodInYear(schoolYear) {
   const previousFinalPeriod = gradePeriods.value.find(period =>
     period.schoolYear === previousSchoolYear && period.semester === '2nd Semester',
   )
-  if (!previousFinalPeriod) return startYear === currentStartYear
+  let academicYearReady = Boolean(
+    previousFinalPeriod?.submitGradeLocked
+      && resolveDeadline(previousFinalPeriod.submitGradeDeadline)?.getTime() <= startOfCurrentDay(),
+  )
 
-  return Boolean(previousFinalPeriod?.submitGradeLocked)
+  if (!previousFinalPeriod && startYear === currentStartYear) {
+    if (semester === '2nd Semester') {
+      academicYearReady = true
+    } else {
+      academicYearReady = gradePeriods.value.length === 0
+    }
+  }
+  if (!academicYearReady || isGradePeriodTakenForYear(semester, schoolYear)) return false
+
+  if (semester === '1st Semester') return true
+  const firstSemester = gradePeriods.value.find(period =>
+    period.schoolYear === schoolYear && period.semester === '1st Semester',
+  )
+  const deadline = resolveDeadline(firstSemester?.submitGradeDeadline)
+  return Boolean(firstSemester?.submitGradeLocked && deadline && deadline.getTime() <= startOfCurrentDay())
 }
 
 function openGradeSubmissionConfirmation(period) {
-  const action = period.submitGradeLocked ? 'unlock' : 'lock'
-  if (action === 'lock' && !canLockGradeSubmission(period)) return
+  if (period.submitGradeLocked || !canLockGradeSubmission(period)) return
   submissionLockError.value = ''
-  submissionLockConfirmation.value = { period, action }
+  submissionLockConfirmation.value = { period }
 }
 
 function closeGradeSubmissionLockConfirmation() {
@@ -944,25 +1022,22 @@ async function confirmUpdateGradeSubmissionLock() {
   if (!period?.id || isLockingGradeSubmission.value) return
   isLockingGradeSubmission.value = true
   try {
-    const updateLockRequest = confirmation.action === 'lock' ? lockGradeSubmission : unlockGradeSubmission
-    const updated = await updateLockRequest(period.id)
+    const updated = await lockGradeSubmission(period.id)
     const index = schedules.value.findIndex(schedule => schedule.id === updated.id)
     if (index !== -1) schedules.value[index] = updated
-    if (confirmation.action === 'lock') {
-      const nextPeriod = updated.semester === '1st Semester'
-        ? { schoolYear: updated.schoolYear, semester: '2nd Semester' }
-        : {
-            schoolYear: `${Number(updated.schoolYear.slice(0, 4)) + 1}-${Number(updated.schoolYear.slice(0, 4)) + 2}`,
-            semester: '1st Semester',
-          }
-      const scheduledNextPeriod = gradePeriods.value.find(item =>
-        item.schoolYear === nextPeriod.schoolYear && item.semester === nextPeriod.semester,
-      )
-      editingPeriodId.value = scheduledNextPeriod?.id || null
-      periodForm.value = {
-        ...nextPeriod,
-        submitGradeDeadline: scheduledNextPeriod?.submitGradeDeadline || '',
-      }
+    const nextPeriod = updated.semester === '1st Semester'
+      ? { schoolYear: updated.schoolYear, semester: '2nd Semester' }
+      : {
+          schoolYear: `${Number(updated.schoolYear.slice(0, 4)) + 1}-${Number(updated.schoolYear.slice(0, 4)) + 2}`,
+          semester: '1st Semester',
+        }
+    const scheduledNextPeriod = gradePeriods.value.find(item =>
+      item.schoolYear === nextPeriod.schoolYear && item.semester === nextPeriod.semester,
+    )
+    editingPeriodId.value = scheduledNextPeriod?.id || null
+    periodForm.value = {
+      ...nextPeriod,
+      submitGradeDeadline: scheduledNextPeriod?.submitGradeDeadline || '',
     }
     submissionLockConfirmation.value = null
   } catch (error) {
@@ -973,20 +1048,15 @@ async function confirmUpdateGradeSubmissionLock() {
 }
 
 function isGradePeriodTaken(semester) {
+  return isGradePeriodTakenForYear(semester, periodForm.value.schoolYear)
+}
+
+function isGradePeriodTakenForYear(semester, schoolYear) {
   return gradePeriods.value.some(period =>
-    period.schoolYear === periodForm.value.schoolYear
+    period.schoolYear === schoolYear
       && period.semester === semester
       && period.id !== editingPeriodId.value,
   )
-}
-
-function canCreateGradePeriodSemester(semester) {
-  if (semester !== '2nd Semester') return true
-  const firstSemester = gradePeriods.value.find(period =>
-    period.schoolYear === periodForm.value.schoolYear && period.semester === '1st Semester',
-  )
-  const deadline = resolveDeadline(firstSemester?.submitGradeDeadline)
-  return Boolean(firstSemester?.submitGradeLocked && deadline && deadline.getTime() <= startOfCurrentDay())
 }
 
 function editGradePeriod(period) {
@@ -1139,6 +1209,11 @@ async function saveGradePeriod() {
 
 .nav-button.active {
   background: rgba(84, 165, 105, 0.65);
+}
+
+.nav-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
 }
 
 .active-bar {
@@ -2202,8 +2277,15 @@ async function saveGradePeriod() {
 .pending-schedule-card form {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
+}
+
+.pending-schedule-period {
+  margin: 0;
+  color: #53665a;
+  font-size: 13px;
+  font-weight: 600;
 }
 
 .pending-schedule-card input,
@@ -3378,6 +3460,41 @@ async function saveGradePeriod() {
     min-height: 0;
   }
 
+  .active-schedule-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .active-schedule-row > div {
+    min-width: 0;
+  }
+
+  .active-schedule-row strong {
+    overflow-wrap: anywhere;
+  }
+
+  .active-schedule-row small {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .period-stage-status,
+  .period-actions {
+    justify-content: flex-start;
+  }
+
+  .complete-period-button {
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .period-actions button {
+    min-height: 36px;
+    padding-inline: 14px;
+  }
+
   .release-form {
     width: 100%;
   }
@@ -3475,6 +3592,31 @@ async function saveGradePeriod() {
 
   .release-fields {
     grid-template-columns: 1fr;
+  }
+
+  .period-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .period-fields .save-period-button {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .period-control-field {
+    padding-top: 0;
+  }
+
+  .active-schedule-row {
+    padding: 10px;
+  }
+
+  .period-actions {
+    width: 100%;
+  }
+
+  .period-actions button {
+    flex: 1;
   }
 
   .add-release-button {

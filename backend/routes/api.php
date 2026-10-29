@@ -26,6 +26,7 @@ Route::middleware('auth.token')->group(function () {
     Route::patch('/grade-sheets/{gradeSheet}/status', [GradeSheetController::class, 'updateStatus']);
     Route::get('/published-grades', [GradeSheetController::class, 'published']);
     Route::get('/students', [StudentController::class, 'index']);
+    Route::get('/students/{studentId}/grades', [StudentController::class, 'grades']);
     Route::get('/professors', [ProfessorController::class, 'index']);
     Route::post('/students', [StudentController::class, 'store']);
     Route::get('/grade-schedules', [GradeScheduleController::class, 'index']);
@@ -34,6 +35,5 @@ Route::middleware('auth.token')->group(function () {
     Route::post('/grade-periods', [GradeScheduleController::class, 'storePeriod']);
     Route::patch('/grade-periods/{schedule}', [GradeScheduleController::class, 'updatePeriod']);
     Route::patch('/grade-periods/{schedule}/lock-submission', [GradeScheduleController::class, 'lockSubmission']);
-    Route::patch('/grade-periods/{schedule}/unlock-submission', [GradeScheduleController::class, 'unlockSubmission']);
     Route::delete('/grade-periods/{schedule}', [GradeScheduleController::class, 'destroyPeriod']);
 });

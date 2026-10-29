@@ -16,10 +16,10 @@ Build or configure a server-side adapter at the boundary. Keep Mother System fie
 
 ## Workflow
 
-1. Registrar configures the semester's grade period: Midterm opening date, then after Midterm is completed, Finals opening date; after Finals is completed, the final-grade submission deadline.
-2. Professors save course criteria and grade drafts, enter assessment scores, and submit Midterm, Finals, or both periods.
+1. Registrar creates one grade period per school-year semester and sets the Submit of Grade deadline. Professors can submit while the period is unlocked.
+2. Professors save course criteria and grade drafts, enter assessment scores, and submit Midterm, Finals, or both periods. Grade sheets are kept separately by academic period.
 3. The API calculates term and final grades from the scores. Registrar approves complete sheets or returns them to the professor with a reason.
-4. Registrar schedules release of approved sheets. Due releases are processed when schedules or student published grades are requested (no separate scheduler is required by the current app).
+4. Registrar schedules approved sheets using the school year, semester, and section year already on the grade sheet; only the release date needs to be selected in the dashboard. Due releases are processed when schedules or student published grades are requested (no separate scheduler is required by the current app).
 5. Students can view only their own records from published grade sheets.
 
 ## API endpoints
@@ -74,15 +74,14 @@ Grade-sheet metadata includes `id`, `code`, `subject`, `section`, `semester`, `s
 | Method and path | Access | Request and response |
 | --- | --- | --- |
 | `GET /grade-schedules` | Student, Professor, Registrar | Returns `{ schedules: [...] }`. Student responses include only course schedules applicable to the student's enrolled courses, plus grade-period schedules. |
-| `POST /grade-schedules` | Registrar | Creates a release schedule: `{ schoolYear, semester, yearLevel, courses, releasedDate }`. `courses` may identify a sheet as `sheet:<gradeSheetId>` (preferred for an exact offering) or a course code. Returns `{ schedule }`. |
+| `POST /grade-schedules` | Registrar | Creates `{ schoolYear, semester, yearLevel, courses, releasedDate }`. In the dashboard these academic values are derived from the approved sheet (`semester` includes school year; `yearLevel` is derived from its section), while the Registrar enters the release date. `courses` uses `sheet:<gradeSheetId>` for exact targeting. Returns `{ schedule }`. |
 | `PATCH /grade-schedules/{id}/release` | Registrar | Releases a due schedule; future-dated schedules are rejected. Returns `{ schedule }`. |
-| `POST /grade-periods` | Registrar | Creates `{ schoolYear, semester, midtermOpens }`. `schoolYear` is `YYYY-YYYY`; `semester` is `1st Semester` or `2nd Semester`. Finals date and submission deadline are set after the preceding period is marked complete. Returns `{ schedule }`. |
-| `PATCH /grade-periods/{id}` | Registrar | Updates `{ schoolYear, semester, midtermOpens, finalsOpens, submitGradeDeadline }`, subject to completion and deadline rules. Returns `{ schedule }`. |
-| `PATCH /grade-periods/{id}/complete` | Registrar | `{ period: "midterm" }` or `{ period: "finals" }`; locks that period as complete and unlocks the next setup step. Returns `{ schedule }`. |
-| `PATCH /grade-periods/{id}/reopen` | Registrar | `{ period: "midterm" }` or `{ period: "finals" }`; reopens that period and final-grade submission. Returns `{ schedule }`. |
-| `DELETE /grade-periods/{id}` | Registrar | Deletes an editable grade period; completed past academic years cannot be deleted. Returns `{ message }`. |
+| `POST /grade-periods` | Registrar | Creates `{ schoolYear, semester, submitGradeDeadline }`. `schoolYear` is `YYYY-YYYY`; `semester` is `1st Semester` or `2nd Semester`. Academic-year progression is validated by the API. Returns `{ schedule }`. |
+| `PATCH /grade-periods/{schedule}` | Registrar | Updates `{ schoolYear, semester, submitGradeDeadline }`, subject to completion and deadline rules. Returns `{ schedule }`. |
+| `PATCH /grade-periods/{schedule}/lock-submission` | Registrar | Locks submissions after the configured deadline. The lock is permanent for that period; it does not delete grade sheets or student records. Returns `{ schedule }`. |
+| `DELETE /grade-periods/{schedule}` | Registrar | Deletes an editable grade period; locked or completed past periods cannot be deleted. Returns `{ message }`. |
 
-Schedule responses use camelCase: `id`, `schoolYear`, `semester`, `yearLevel`, `courses`, `releasedDate`, `status`, `midtermOpens`, `finalsOpens`, `submitGradeDeadline`, `midtermLocked`, and `finalsLocked`. A grade-period schedule has `yearLevel: "Grade Period"`.
+Schedule responses use camelCase: `id`, `schoolYear`, `semester`, `yearLevel`, `courses`, `releasedDate`, `status`, `submitGradeDeadline`, and `submitGradeLocked`. A grade-period schedule has `yearLevel: "Grade Period"`.
 
 ## Required data mapping and rules
 
@@ -90,9 +89,9 @@ Schedule responses use camelCase: `id`, `schoolYear`, `semester`, `yearLevel`, `
 2. **Course identity:** distinguish an offering by course code, section, semester, and school year. Use `sheet:<id>` in a release schedule when a course code alone could select multiple offerings. Semester values on grade sheets include the school year (for example, `1st Semester 2026-2027`); grade-period schedules store `semester` and `schoolYear` separately.
 3. **Enrollment:** return institute, course, year level, section, units, and status consistently. Student schedules must include only the student's enrolled offerings. A student's academic summary is based on expected enrolled courses and complete passing published records.
 4. **Grades:** send assessment scores, not calculated summaries to be trusted. The grading API computes term, final, grade point, and remarks from scores and saved criteria. Scores/max scores are limited to 100; each configured period's weights total 100%.
-5. **Availability and release:** professors cannot submit a locked/not-yet-open period. Students see published sheets only. A release affects only complete, approved sheets that match the selected schedule.
+5. **Availability and release:** professors cannot save or submit to a locked grade period. Locking a period preserves its grade sheets and student records. Opening a new period creates a blank course grade sheet with the student roster; it does not overwrite prior-period results. Students see published sheets only. A release affects only complete, approved sheets that match the selected schedule.
 6. **Time:** grade dates and deadlines are evaluated using the Asia/Manila timezone. The current app processes due release schedules when `GET /grade-schedules` or `GET /published-grades` is called; do not assume an external cron is required for this behavior.
 
 ## Integration acceptance check
 
-Before connecting real accounts, verify: authentication-to-role mapping; a student identity linked to an enrolled course; professor score/draft save and a Midterm-only submission; Finals submission and server-calculated final grade; Registrar approval and scheduled release; and that only the correct student can see the published record. The app integration does not include Mother System-specific API credentials, database synchronization, or an external deployment URL until the integration team supplies them.
+Before connecting real accounts, verify: authentication-to-role mapping; a student identity linked to an enrolled course; professor criteria/draft save, score entry, and submission; Registrar approval or return, semester lock, and scheduled release; that a new period keeps the roster but starts blank without changing historical grades; and that only the correct student can see the published record. The app integration does not include Mother System-specific API credentials, database synchronization, or an external deployment URL until the integration team supplies them.

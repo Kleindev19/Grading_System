@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use App\Models\GradeSheetStudent;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -52,6 +53,41 @@ class StudentController extends Controller
         });
 
         return response()->json(['students' => $students->fresh()->values()]);
+    }
+
+    public function grades(Request $request, string $studentId): JsonResponse
+    {
+        abort_unless(in_array($request->attributes->get('auth_user')->role, ['registrar', 'professor'], true), 403, 'Only registrars and professors can view student grades.');
+
+        $student = Student::query()->where('student_id', $studentId)->firstOrFail();
+        $studentIdentifiers = collect([$student->student_id])
+            ->merge(User::query()
+                ->where('student_id', $student->student_id)
+                ->orWhere('username', $student->student_id)
+                ->pluck('username'))
+            ->filter()
+            ->unique()
+            ->values();
+        $grades = GradeSheetStudent::with('gradeSheet.professor:id,name')
+            ->whereIn('student_id', $studentIdentifiers)
+            ->whereHas('gradeSheet', fn ($query) => $query->where('status', 'Published'))
+            ->get()
+            ->map(fn (GradeSheetStudent $record): array => [
+                'id' => $record->gradeSheet->id,
+                'code' => $record->gradeSheet->code,
+                'subject' => $record->gradeSheet->subject,
+                'semester' => $record->gradeSheet->semester,
+                'professor' => $record->gradeSheet->professor?->name ?? '',
+                'units' => $record->gradeSheet->units,
+                'midterm' => $record->midterm ?? '',
+                'finals' => $record->finals ?? '',
+                'finalGrade' => $record->final_grade ?? '',
+                'gradePoint' => $record->grade_point ?? '',
+                'remarks' => strtoupper(trim((string) $record->remarks)) === 'INC' ? 'FAILED' : ($record->remarks ?? ''),
+            ])
+            ->values();
+
+        return response()->json(['grades' => $grades]);
     }
 
     public function store(Request $request): JsonResponse

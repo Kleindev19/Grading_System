@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeCriteria;
+use App\Services\GradeSubmissionLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -47,6 +48,7 @@ class GradeCriteriaController extends Controller
             'criteria.finals.*.maxScore' => ['required', 'numeric', 'gt:0', 'max:100'],
             'assessment_headers' => ['required', 'array'],
         ]);
+        GradeSubmissionLock::ensureUnlocked($data['semester']);
 
         if (array_is_list($data['assessment_headers'])) {
             $headers = Validator::make(

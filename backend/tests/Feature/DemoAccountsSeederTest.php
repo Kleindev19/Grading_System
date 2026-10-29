@@ -77,6 +77,61 @@ class DemoAccountsSeederTest extends TestCase
         $this->assertGreaterThanOrEqual(2, GradeSchedule::where('created_by', $registrar->id)->count());
     }
 
+    public function test_registrar_student_grade_lookup_returns_only_the_selected_students_published_record(): void
+    {
+        $this->seed(DemoAccountsSeeder::class);
+
+        $registrar = User::where('username', 'mock.registrar')->firstOrFail();
+        $token = $this->postJson('/api/login', [
+            'username' => $registrar->username,
+            'password' => 'Password123!',
+        ])->assertOk()->json('token');
+
+        $sheet = GradeSheet::where('code', 'MOCK-PUBLISHED')->firstOrFail();
+        $sheet->studentsList()->where('student_id', '23-00002')->update([
+            'midterm' => '82',
+            'finals' => '86',
+            'final_grade' => '84.40',
+            'grade_point' => '2.25',
+            'remarks' => 'PASSED',
+        ]);
+
+        $this->withToken($token)
+            ->getJson('/api/students/23-00002/grades')
+            ->assertOk()
+            ->assertJsonCount(1, 'grades')
+            ->assertJsonPath('grades.0.code', 'MOCK-PUBLISHED')
+            ->assertJsonPath('grades.0.midterm', '82')
+            ->assertJsonPath('grades.0.finals', '86')
+            ->assertJsonPath('grades.0.finalGrade', '84.40')
+            ->assertJsonPath('grades.0.gradePoint', '2.25');
+    }
+
+    public function test_registrar_student_grade_lookup_supports_grade_records_keyed_by_student_username(): void
+    {
+        $this->seed(DemoAccountsSeeder::class);
+
+        $registrar = User::where('username', 'mock.registrar')->firstOrFail();
+        $token = $this->postJson('/api/login', [
+            'username' => $registrar->username,
+            'password' => 'Password123!',
+        ])->assertOk()->json('token');
+
+        User::factory()->create([
+            'role' => 'student',
+            'student_id' => '23-00002',
+            'username' => 'alex.sample.account',
+        ]);
+        $sheet = GradeSheet::where('code', 'MOCK-PUBLISHED')->firstOrFail();
+        $sheet->studentsList()->where('student_id', '23-00002')->update(['student_id' => 'alex.sample.account']);
+
+        $this->withToken($token)
+            ->getJson('/api/students/23-00002/grades')
+            ->assertOk()
+            ->assertJsonCount(1, 'grades')
+            ->assertJsonPath('grades.0.midterm', '88');
+    }
+
     public function test_demo_professor_can_submit_registrar_can_approve_and_publish_student_grades(): void
     {
         $this->seed(DemoAccountsSeeder::class);

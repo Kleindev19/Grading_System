@@ -19,9 +19,9 @@
         <div class="grade-toolbar">
           <label class="search-box"><input v-model="searchStudent" placeholder="Search student name or ID..." /></label>
           <div class="grade-actions">
-            <template v-if="activePeriod !== 'final-grade'"><div class="choice-action"><button type="button" class="add-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleAddChoices">+ Add Assessment</button><div v-if="addChoiceOpen" class="assessment-choices"><button v-for="type in assessmentTypes" :key="type.category" type="button" @click="addAssessment(type.category)">{{ type.name }}</button><button type="button" @click="openCustomAssessment"><span aria-hidden="true">+</span> Custom Assessment</button></div></div>
-            <div class="choice-action"><button type="button" class="remove-button" :disabled="gradeHeaders.length <= 1 || isGradeLocked(activeScorePeriod)" @click="toggleRemoveChoices">Remove</button><div v-if="removeChoiceOpen" class="assessment-choices"><button v-for="assessment in gradeHeaders" :key="assessment" type="button" @click="selectedAssessment = assessment; removeSelectedAssessment()">{{ assessmentDisplayName(assessment) }}</button></div></div>
-            <div class="choice-action"><button type="button" class="restore-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleRestoreChoices">Restore</button><div v-if="restoreChoiceOpen" class="assessment-choices"><button v-for="assessment in defaultGradeHeaders" :key="assessment" type="button" :disabled="gradeHeaders.includes(assessment)" @click="selectedAssessment = assessment; restoreSelectedAssessment()">{{ assessment }}</button></div></div>
+            <template v-if="activePeriod !== 'final-grade'"><div class="choice-action"><button type="button" class="add-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleAddChoices">+ Add Assessment</button><div v-if="addChoiceOpen" class="assessment-choices"><button v-for="type in assessmentTypes" :key="type.category" type="button" :disabled="isGradeLocked(activeScorePeriod)" @click="addAssessment(type.category)">{{ type.name }}</button><button type="button" :disabled="isGradeLocked(activeScorePeriod)" @click="openCustomAssessment"><span aria-hidden="true">+</span> Custom Assessment</button></div></div>
+            <div class="choice-action"><button type="button" class="remove-button" :disabled="gradeHeaders.length <= 1 || isGradeLocked(activeScorePeriod)" @click="toggleRemoveChoices">Remove</button><div v-if="removeChoiceOpen" class="assessment-choices"><button v-for="assessment in gradeHeaders" :key="assessment" type="button" :disabled="isGradeLocked(activeScorePeriod)" @click="selectedAssessment = assessment; removeSelectedAssessment()">{{ assessmentDisplayName(assessment) }}</button></div></div>
+            <div class="choice-action"><button type="button" class="restore-button" :disabled="isGradeLocked(activeScorePeriod)" @click="toggleRestoreChoices">Restore</button><div v-if="restoreChoiceOpen" class="assessment-choices"><button v-for="assessment in defaultGradeHeaders" :key="assessment" type="button" :disabled="isGradeLocked(activeScorePeriod) || gradeHeaders.includes(assessment)" @click="selectedAssessment = assessment; restoreSelectedAssessment()">{{ assessment }}</button></div></div>
             <button type="button" class="criteria-open-button" :disabled="isGradeLocked(activeScorePeriod)" @click="openCriteriaEditor">▤ Criteria</button>
             </template>
             <span v-if="draftSaveStatus" class="draft-save-status" role="status">
@@ -30,10 +30,15 @@
             </span>
           </div>
         </div>
+        <p v-if="isSubmissionLockedByRegistrar" class="draft-save-status" role="status">The Registrar locked grade submission. Grades are read-only.</p>
         <p v-if="scoreEntryError || maxScoreError" class="criteria-error" role="alert">{{ scoreEntryError || maxScoreError }}</p>
         <div class="grade-columns">
           <section class="grade-table-card">
             <h2>{{ selectedCourse.name }} ({{ selectedCourse.section }})</h2>
+            <p v-if="selectedSchoolYear" class="school-year-label">
+              School Year: {{ selectedSchoolYear }}
+              <span v-if="selectedSemester">| Semester: {{ selectedSemester }}</span>
+            </p>
             <div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" @click="openGradingPeriod('midterm')">Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" @click="openGradingPeriod('finals')">Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div>
             <div class="table-scroll" :class="{ 'final-grade-scroll': activePeriod === 'final-grade' }"><table class="grade-table" :class="{ 'final-grade-table': activePeriod === 'final-grade' }">
               <thead v-if="activePeriod === 'final-grade'"><tr><th>#</th><th>STUDENT ID</th><th class="wide">STUDENT NAME</th><th>MIDTERM ({{ FINAL_GRADE_WEIGHTS.midterm }}%)</th><th>FINALS ({{ FINAL_GRADE_WEIGHTS.finals }}%)</th><th>FINAL<br />GRADE</th><th class="equivalent-grade-heading">EQUIVALENT<br />GRADE</th></tr></thead>
@@ -43,11 +48,12 @@
           </section>
           <aside class="summary-box"><template v-if="activePeriod === 'final-grade'"><h2>FINAL GRADE WEIGHTS</h2><table><thead><tr><th>Grading Period</th><th>Percentage</th></tr></thead><tbody><tr><td>Midterm</td><td>{{ FINAL_GRADE_WEIGHTS.midterm }}%</td></tr><tr><td>Finals</td><td>{{ FINAL_GRADE_WEIGHTS.finals }}%</td></tr><tr class="total"><td>TOTAL</td><td>{{ FINAL_GRADE_WEIGHTS.midterm + FINAL_GRADE_WEIGHTS.finals }}%</td></tr></tbody></table></template><template v-else><h2>{{ criteriaPeriod.toUpperCase() }}</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td>{{ item.maxScore }}</td><td>{{ item.weight }}%</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></template></aside>
         </div>
-        <template v-if="activePeriod === 'final-grade'"><div class="final-grade-actions"><button class="export-excel-btn" type="button" :disabled="allGradeStudents.length === 0" @click="exportFinalGrades">Export to Excel</button><button class="submit-action-btn" type="button" :disabled="isSubmitting || (!hasFinalGradeSubmissionDeadline && !isSubmissionLockedByRegistrar)" :title="finalGradeSubmissionDeadlineMessage" @click="openSubmissionConfirmation">Submit to Registrar</button></div><small role="status">{{ finalGradeSubmissionDeadlineMessage }}</small></template>
+        <template v-if="activePeriod === 'final-grade'"><div class="final-grade-actions"><button class="export-excel-btn" type="button" :disabled="allGradeStudents.length === 0" @click="exportChoiceOpen = true">Export to Excel</button><button class="submit-action-btn" :class="{ 'is-submitted': isGradeSheetSubmitted }" type="button" :disabled="isSubmitting || isGradeSheetSubmitted || !hasFinalGradeSubmissionDeadline || isSubmissionLockedByRegistrar" :title="isGradeSheetSubmitted ? 'Grades have already been submitted to the Registrar.' : finalGradeSubmissionDeadlineMessage" @click="openSubmissionConfirmation">{{ isGradeSheetSubmitted ? 'Submitted' : hasReturnedGradeSheet ? 'Resubmit to Registrar' : 'Submit to Registrar' }}</button></div><small role="status">{{ isGradeSheetSubmitted ? 'Grades have been submitted to the Registrar.' : finalGradeSubmissionDeadlineMessage }}</small></template>
+        <div v-if="exportChoiceOpen" class="modal-backdrop" @click.self="exportChoiceOpen = false"><section class="export-choice-dialog" role="dialog" aria-modal="true" aria-labelledby="export-choice-title"><h2 id="export-choice-title">Choose grades to export</h2><p>Select which grading results to include in the Excel file.</p><div class="export-choice-actions"><button type="button" @click="exportGrades('midterm')">Midterm Grades</button><button type="button" @click="exportGrades('finals')">Finals Grades</button><button type="button" @click="exportGrades('final-grade')">Final Grade</button></div><button class="export-choice-cancel" type="button" @click="exportChoiceOpen = false">Cancel</button></section></div>
         <div v-if="showFinalsNotice" class="modal-backdrop" @click.self="showFinalsNotice = false"><section class="finals-notice" role="dialog" aria-modal="true" aria-labelledby="period-lock-title"><div class="notice-icon">&#128197;</div><h2 id="period-lock-title">{{ periodLockTitle(noticePeriod) }}</h2><p>{{ periodLockMessage(noticePeriod) }}</p><button type="button" @click="showFinalsNotice = false">Close</button></section></div>
-        <div v-if="customAssessmentOpen" class="modal-backdrop" @click.self="customAssessmentOpen = false"><form class="custom-assessment-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-assessment-title" @submit.prevent="submitCustomAssessment"><h2 id="custom-assessment-title">Add Custom Assessment</h2><label>Include in category<select v-model="customAssessmentCategory"><option v-for="type in customAssessmentCategories" :key="type.value" :value="type.value">{{ type.name }}</option></select></label><label>Assessment name<input v-model="customAssessmentName" autofocus maxlength="40" placeholder="e.g. Project" required /></label><p v-if="customAssessmentCategory === 'custom'">This creates a separate grading category. Set its percentage and maximum score in Criteria after adding it.</p><p v-else>Scores are averaged with the selected category. Project uses the Assignment weight; Attendance uses the Recitation weight.</p><p v-if="customAssessmentError" class="custom-assessment-error" role="alert">{{ customAssessmentError }}</p><div class="custom-assessment-actions"><button type="button" @click="customAssessmentOpen = false">Cancel</button><button type="submit">Add Assessment</button></div></form></div>
-        <Teleport to="body"><div v-if="submissionConfirmOpen" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeSubmissionConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="submission-confirmation-title"><h2 id="submission-confirmation-title">Are you sure you want to submit?</h2><p>Once submitted, grades will be sent to the Registrar.<br />To request changes after submission, please contact the Registrar's Office directly.</p><p v-if="submissionError" class="submission-confirmation-error" role="alert">{{ submissionError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isSubmitting" @click="closeSubmissionConfirmation">Go Back</button><button type="button" :disabled="isSubmitting" @click="submitToRegistrar(true)">{{ isSubmitting ? 'Submitting...' : 'Submit Grades' }}</button></div></section></div></Teleport>
-        <div v-if="criteriaOpen" class="modal-backdrop" @click.self="closeCriteriaEditor"><section class="criteria-dialog" role="dialog" aria-modal="true" aria-labelledby="criteria-title"><h2 id="criteria-title">Grading Criteria</h2><p class="criteria-period-label">{{ criteriaPeriod === 'midterm' ? 'MIDTERM' : 'FINALS' }}</p><div class="criteria-table-scroll"><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].maxScore" type="number" min="1" max="100" step="any" :aria-label="`${item.name} maximum score`" @input="clearCriteriaError" /><span v-else>{{ item.maxScore }}</span></td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].weight" type="number" min="0" :max="maxCriterionWeight(item.key)" step="0.01" :aria-label="`${item.name} percentage`" @input="limitCriterionWeight(item.key, $event)" /><span v-else>{{ item.weight }}%</span></td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></div><p class="criteria-help">Percentages for each grading period must total 100%. Scores are converted using each item's maximum score. Each assessment maximum must be between 1 and 100.</p><p v-if="criteriaError" class="criteria-error" role="alert">{{ criteriaError }}</p><div class="criteria-actions"><button v-if="!criteriaEditing" type="button" @click="startCriteriaEdit">Edit</button><button v-if="!criteriaEditing" type="button" @click="closeCriteriaEditor">Done</button><template v-else><button type="button" :disabled="criteriaSaving" @click="cancelCriteriaEdit">Cancel</button><button type="button" :disabled="!canSaveCriteria" @click="saveCriteria">{{ criteriaSaving ? 'Saving...' : 'Save' }}</button></template></div></section></div>
+        <div v-if="customAssessmentOpen" class="modal-backdrop" @click.self="customAssessmentOpen = false"><form class="custom-assessment-dialog" role="dialog" aria-modal="true" aria-labelledby="custom-assessment-title" @submit.prevent="submitCustomAssessment"><h2 id="custom-assessment-title">Add Custom Assessment</h2><label>Include in category<select v-model="customAssessmentCategory" :disabled="isGradeLocked(activeScorePeriod)"><option v-for="type in customAssessmentCategories" :key="type.value" :value="type.value">{{ type.name }}</option></select></label><label>Assessment name<input v-model="customAssessmentName" :disabled="isGradeLocked(activeScorePeriod)" autofocus maxlength="40" placeholder="e.g. Project" required /></label><p v-if="customAssessmentCategory === 'custom'">This creates a separate grading category. Set its percentage and maximum score in Criteria after adding it.</p><p v-else>Scores are averaged with the selected category. Project uses the Assignment weight; Attendance uses the Recitation weight.</p><p v-if="customAssessmentError" class="custom-assessment-error" role="alert">{{ customAssessmentError }}</p><div class="custom-assessment-actions"><button type="button" @click="customAssessmentOpen = false">Cancel</button><button type="submit" :disabled="isGradeLocked(activeScorePeriod)">Add Assessment</button></div></form></div>
+        <Teleport to="body"><div v-if="submissionConfirmOpen" class="modal-backdrop submission-confirmation-backdrop" @click.self="closeSubmissionConfirmation"><section class="submission-confirmation" role="dialog" aria-modal="true" aria-labelledby="submission-confirmation-title"><h2 id="submission-confirmation-title">Are you sure you want to submit?</h2><p>Once submitted, grades will be sent to the Registrar.<br />To request changes after submission, please contact the Registrar's Office directly.</p><p v-if="submissionError" class="submission-confirmation-error" role="alert">{{ submissionError }}</p><div class="submission-confirmation-actions"><button type="button" :disabled="isSubmitting" @click="closeSubmissionConfirmation">Go Back</button><button type="button" :disabled="isSubmitting || isSubmissionLockedByRegistrar" @click="submitToRegistrar(true)">{{ isSubmitting ? 'Submitting...' : 'Submit Grades' }}</button></div></section></div></Teleport>
+        <div v-if="criteriaOpen" class="modal-backdrop" @click.self="closeCriteriaEditor"><section class="criteria-dialog" role="dialog" aria-modal="true" aria-labelledby="criteria-title"><h2 id="criteria-title">Grading Criteria</h2><p class="criteria-period-label">{{ criteriaPeriod === 'midterm' ? 'MIDTERM' : 'FINALS' }}</p><div class="criteria-table-scroll"><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].maxScore" type="number" min="1" max="100" step="any" :disabled="isGradeLocked(criteriaPeriod)" :aria-label="`${item.name} maximum score`" @input="clearCriteriaError" /><span v-else>{{ item.maxScore }}</span></td><td><input v-if="criteriaEditing" v-model.number="criteriaDraft[criteriaPeriod][item.key].weight" type="number" min="0" :max="maxCriterionWeight(item.key)" step="0.01" :disabled="isGradeLocked(criteriaPeriod)" :aria-label="`${item.name} percentage`" @input="limitCriterionWeight(item.key, $event)" /><span v-else>{{ item.weight }}%</span></td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></div><p class="criteria-help">Percentages for each grading period must total 100%. Scores are converted using each item's maximum score. Each assessment maximum must be between 1 and 100.</p><p v-if="criteriaError" class="criteria-error" role="alert">{{ criteriaError }}</p><div class="criteria-actions"><button v-if="!criteriaEditing" type="button" :disabled="isGradeLocked(criteriaPeriod)" @click="startCriteriaEdit">Edit</button><button v-if="!criteriaEditing" type="button" @click="closeCriteriaEditor">Done</button><template v-else><button type="button" :disabled="criteriaSaving" @click="cancelCriteriaEdit">Cancel</button><button type="button" :disabled="!canSaveCriteria" @click="saveCriteria">{{ criteriaSaving ? 'Saving...' : 'Save' }}</button></template></div></section></div>
       </div>
     </main>
   </div>
@@ -65,6 +71,7 @@ const draftSaveStatus = ref('')
 const props = defineProps({ user: { type: Object, default: null } })
 const emit = defineEmits(['signout', 'submitted'])
 const isMobile = ref(window.innerWidth <= 900); const sidebarCollapsed = ref(isMobile.value); const view = ref('lists'); const searchStudent = ref(''); const selectedSection = ref('all'); const selectedYear = ref('1st Year'); const expandedInstitute = ref(''); const activePeriod = ref('midterm'); const selectedAssessment = ref('Q1'); const addChoiceOpen = ref(false); const removeChoiceOpen = ref(false); const restoreChoiceOpen = ref(false); const customAssessmentOpen = ref(false); const customAssessmentName = ref(''); const customAssessmentCategory = ref('assignment'); const customAssessmentError = ref(''); const submissionConfirmOpen = ref(false); const submissionError = ref(''); const isSubmitting = ref(false); const showFinalsNotice = ref(false); const noticePeriod = ref('finals'); const submissionNotice = ref(false); const submissionSent = ref(false); const years = ['1st Year', '2nd Year', '3rd Year', '4th Year']; const defaultGradeHeaders = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'L1', 'A1', 'A2', 'A3', 'A4', 'R1', 'Mid Ex']
+const exportChoiceOpen = ref(false)
 const gradeHeadersByPeriod = reactive({
   midterm: [...defaultGradeHeaders],
   finals: [...defaultGradeHeaders],
@@ -95,6 +102,70 @@ const midtermItems = [{ name: 'Quiz' }, { name: 'Activity' }, { name: 'Recitatio
 const gradePeriods = ref([])
 const gradeSheets = ref([])
 const currentClock = ref(Date.now())
+const currentGradePeriod = computed(() => {
+  const openPeriods = gradePeriods.value.filter(period => !period.submitGradeLocked)
+  const periodsToSort = openPeriods.length ? openPeriods : gradePeriods.value
+
+  return [...periodsToSort].sort((left, right) => {
+    const leftPeriod = parseAcademicPeriod(left.semester, left.schoolYear)
+    const rightPeriod = parseAcademicPeriod(right.semester, right.schoolYear)
+    const yearDifference = Number(rightPeriod.schoolYear.slice(0, 4)) - Number(leftPeriod.schoolYear.slice(0, 4))
+    if (yearDifference) return yearDifference
+    const semesterRank = (semester) => semester.startsWith('2nd') ? 2 : 1
+    return semesterRank(rightPeriod.semester) - semesterRank(leftPeriod.semester)
+  })[0]
+})
+const professorGradeSheets = computed(() => {
+  const currentPeriod = currentGradePeriod.value
+  if (!currentPeriod) return gradeSheets.value
+
+  const currentSheets = gradeSheets.value.filter(sheet => sameAcademicPeriod(
+    sheet.semester,
+    '',
+    currentPeriod.semester,
+    currentPeriod.schoolYear,
+  ))
+  const currentRank = academicPeriodRank(`${currentPeriod.semester} ${currentPeriod.schoolYear}`)
+  const currentCourseKeys = new Set(currentSheets.map(sheet => `${sheet.code}:${sheet.section}`))
+  const latestPreviousSheets = new Map()
+  gradeSheets.value
+    .filter(sheet => academicPeriodRank(sheet.semester) < currentRank)
+    .sort((left, right) => academicPeriodRank(right.semester) - academicPeriodRank(left.semester))
+    .forEach(sheet => {
+      const key = `${sheet.code}:${sheet.section}`
+      if (!currentCourseKeys.has(key) && !latestPreviousSheets.has(key)) {
+        latestPreviousSheets.set(key, sheet)
+      }
+    })
+
+  if (currentPeriod.submitGradeLocked) {
+    return gradeSheets.value
+  }
+
+  const blankCurrentSheets = [...latestPreviousSheets.values()].map(sheet => {
+    const studentRecords = (sheet.student_records || []).map(student => ({
+      id: student.id,
+      name: student.name,
+      midterm: '',
+      finals: '',
+      finalGrade: '',
+      gradePoint: '',
+      remarks: '',
+      scores: { midterm: {}, finals: {} },
+    }))
+    return {
+      ...sheet,
+      semester: `${currentPeriod.semester} ${currentPeriod.schoolYear}`,
+      students: studentRecords.length || sheet.students,
+      submitted: '',
+      status: 'Submitted',
+      rejection_reason: null,
+      student_records: studentRecords,
+    }
+  })
+
+  return [...gradeSheets.value, ...blankCurrentSheets]
+})
 const isFinalGradeSubmissionLocked = computed(() => {
   const gradePeriod = getGradePeriodSchedule()
   return !parseSystemDate(gradePeriod?.submitGradeDeadline) || Boolean(gradePeriod?.submitGradeLocked)
@@ -144,6 +215,7 @@ const criteriaRows = computed(() => {
 const criteriaWeightTotal = computed(() => Math.round(criteriaRows.value.reduce((sum, item) => sum + item.weight, 0) * 100) / 100)
 const canSaveCriteria = computed(() => (
   !criteriaSaving.value
+    && !isGradeLocked(criteriaPeriod.value)
     && !criteriaError.value
     && Math.abs(criteriaWeightTotal.value - 100) <= 0.001
     && criteriaRows.value.every(item => Number.isFinite(item.weight) && item.weight >= 0 && Number.isFinite(item.maxScore) && item.maxScore > 0 && item.maxScore <= 100)
@@ -314,43 +386,55 @@ function displayTermGrade(student, period) {
   return termGrade === null ? 'FAILED' : `${termGrade.toFixed(2)}%`
 }
 
-async function exportFinalGrades() {
+async function exportGrades(period) {
   try {
-    const rows = [
-      ['#', 'Student ID', 'Student Name', `Midterm (${FINAL_GRADE_WEIGHTS.midterm}%)`, `Finals (${FINAL_GRADE_WEIGHTS.finals}%)`, 'Final Grade', 'Equivalent Grade'],
-      ...allGradeStudents.map((student, index) => [
-        index + 1,
-        student.id,
-        student.name,
-        displayTermGrade(student, 'midterm'),
-        displayTermGrade(student, 'finals'),
-        displayGrade(student, 'final-grade'),
-        displayEquivalentGrade(student),
-      ]),
-    ]
+    const isFinalGrade = period === 'final-grade'
+    const periodLabel = period === 'midterm' ? 'Midterm' : period === 'finals' ? 'Finals' : 'Final Grade'
+    const columns = isFinalGrade
+      ? [
+          { header: '#', key: 'number', width: 6 },
+          { header: 'Student ID', key: 'studentId', width: 16 },
+          { header: 'Student Name', key: 'studentName', width: 28 },
+          { header: `Midterm (${FINAL_GRADE_WEIGHTS.midterm}%)`, key: 'midterm', width: 18 },
+          { header: `Finals (${FINAL_GRADE_WEIGHTS.finals}%)`, key: 'finals', width: 16 },
+          { header: 'Final Grade', key: 'finalGrade', width: 14 },
+          { header: 'Equivalent Grade', key: 'equivalentGrade', width: 18 },
+        ]
+      : [
+          { header: '#', key: 'number', width: 6 },
+          { header: 'Student ID', key: 'studentId', width: 16 },
+          { header: 'Student Name', key: 'studentName', width: 28 },
+          { header: `${periodLabel} Grade`, key: 'grade', width: 18 },
+        ]
+    const rows = allGradeStudents.map((student, index) => {
+      const row = {
+        number: index + 1,
+        studentId: student.id,
+        studentName: student.name,
+      }
+      if (isFinalGrade) {
+        row.midterm = displayTermGrade(student, 'midterm')
+        row.finals = displayTermGrade(student, 'finals')
+        row.finalGrade = displayGrade(student, 'final-grade')
+        row.equivalentGrade = displayEquivalentGrade(student)
+      } else {
+        row.grade = displayTermGrade(student, period)
+      }
+      return row
+    })
     const filePart = value => value.trim().replace(/[<>:"/\\|?*\x00-\x1F]/g, '-').replace(/\s+/g, '_')
     const filename = [
       selectedCourse.value.code,
       selectedCourse.value.section,
       selectedCourse.value.semester,
-      'final_grades',
+      period === 'final-grade' ? 'final_grades' : `${period}_grades`,
     ].map(filePart).filter(Boolean).join('_') || 'final_grades'
     const ExcelJS = await import('exceljs')
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet('Final Grades')
-    worksheet.columns = [
-      { header: rows[0][0], key: 'number', width: 6 },
-      { header: rows[0][1], key: 'studentId', width: 16 },
-      { header: rows[0][2], key: 'studentName', width: 28 },
-      { header: rows[0][3], key: 'midterm', width: 18 },
-      { header: rows[0][4], key: 'finals', width: 16 },
-      { header: rows[0][5], key: 'finalGrade', width: 14 },
-      { header: rows[0][6], key: 'equivalentGrade', width: 18 },
-    ]
-    worksheet.addRows(rows.slice(1).map(row => Object.fromEntries(
-      worksheet.columns.map((column, index) => [column.key, row[index]]),
-    )))
-    worksheet.autoFilter = { from: 'A1', to: `G${Math.max(rows.length, 1)}` }
+    const worksheet = workbook.addWorksheet(periodLabel)
+    worksheet.columns = columns
+    worksheet.addRows(rows)
+    worksheet.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + columns.length)}${Math.max(rows.length + 1, 1)}` }
     const content = await workbook.xlsx.writeBuffer()
     const url = URL.createObjectURL(new Blob([content], {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -361,10 +445,11 @@ async function exportFinalGrades() {
     document.body.append(link)
     link.click()
     link.remove()
+    exportChoiceOpen.value = false
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch (error) {
-    console.error('Unable to export final grades.', error)
-    window.alert(error instanceof Error ? error.message : 'Unable to export final grades.')
+    console.error('Unable to export grades.', error)
+    window.alert(error instanceof Error ? error.message : 'Unable to export grades.')
   }
 }
 
@@ -376,6 +461,13 @@ function exceedsMaxScore(student, header, period) {
 
 function resolveDeadline(dateValue) {
   return parseSystemDate(dateValue)
+}
+
+function academicPeriodRank(value) {
+  const period = parseAcademicPeriod(value)
+  const startYear = Number(period.schoolYear.match(/^\d{4}/)?.[0])
+  const semesterRank = period.semester.startsWith('2nd') ? 2 : 1
+  return (Number.isFinite(startYear) ? startYear : 0) * 10 + semesterRank
 }
 
 function getGradePeriodSchedule() {
@@ -396,7 +488,7 @@ function getGradePeriod(type) {
 
 function isGradeLocked(type) {
   const period = getGradePeriod(type)
-  return !period
+  return !period || period.submissionLocked
 }
 
 function periodLockTitle(type) {
@@ -425,7 +517,7 @@ async function openGradingPeriod(type) {
     return false
   }
   currentClock.value = Date.now()
-  if (isGradeLocked(type)) {
+  if (!getGradePeriod(type)) {
     noticePeriod.value = type
     showFinalsNotice.value = true
     return false
@@ -448,7 +540,7 @@ const institutes = computed(() => {
     { id: 'ics', name: 'ICS - Institute of Computing Studies' },
     { id: 'ite', name: 'ITE - Institute of Teachers Education' },
   ].forEach(institute => instituteMap.set(institute.id, { ...institute, groups: [] }))
-  gradeSheets.value.forEach(sheet => {
+  professorGradeSheets.value.forEach(sheet => {
     const institute = instituteForSection(sheet.section)
     const target = instituteMap.get(institute.id)
     let group = target.groups.find(item => item.name === sheet.subject.toUpperCase())
@@ -483,6 +575,19 @@ const visibleGroups = computed(() => (selectedInstitute.value.groups || []).map(
 })).filter(group => group.courses.length > 0))
 const sections = computed(() => institutes.value.flatMap(institute => institute.groups.flatMap(group => group.courses.map(course => course.section))))
 const selectedCourse = ref({ name: '', section: '' })
+const currentGradeSheet = computed(() => gradeSheets.value.find(sheet =>
+  sheet.code === selectedCourse.value.code
+    && sheet.section === selectedCourse.value.section
+    && sameAcademicPeriod(sheet.semester, '', selectedCourse.value.semester || ''),
+))
+const isGradeSheetSubmitted = computed(() => {
+  const sheet = currentGradeSheet.value
+  return Boolean(sheet && ['Submitted', 'Approved', 'Published'].includes(sheet.status) && !sheet.rejection_reason)
+})
+const hasReturnedGradeSheet = computed(() => Boolean(currentGradeSheet.value?.rejection_reason))
+const selectedAcademicPeriod = computed(() => parseAcademicPeriod(selectedCourse.value.semester || ''))
+const selectedSchoolYear = computed(() => selectedAcademicPeriod.value.schoolYear)
+const selectedSemester = computed(() => selectedAcademicPeriod.value.semester.replace(/\b\w/g, character => character.toUpperCase()))
 let draftSaveTimer
 let draftSaveQueue = Promise.resolve()
 let draftSaveVersion = 0
@@ -563,7 +668,7 @@ async function openGrades(course) {
 }
 
 async function submitToRegistrar(confirmed = false) {
-  if (isSubmitting.value) return
+  if (isSubmitting.value || isGradeSheetSubmitted.value) return
   if (activePeriod.value !== 'final-grade') {
     return
   }
@@ -658,7 +763,7 @@ async function submitToRegistrar(confirmed = false) {
 }
 
 function openSubmissionConfirmation() {
-  if (isSubmitting.value || activePeriod.value !== 'final-grade') return
+  if (isSubmitting.value || isGradeSheetSubmitted.value || activePeriod.value !== 'final-grade') return
   if (isSubmissionLockedByRegistrar.value) {
     noticePeriod.value = activeScorePeriod.value
     showFinalsNotice.value = true
@@ -707,7 +812,7 @@ const allGradeStudents = reactive([])
 const originalGradeStudents = reactive([])
 
 function currentGradeDraft() {
-  if (view.value !== 'grades' || !selectedCourse.value.code || !selectedCourse.value.section || !selectedCourse.value.semester) return null
+  if (view.value !== 'grades' || isGradeLocked(activeScorePeriod.value) || !selectedCourse.value.code || !selectedCourse.value.section || !selectedCourse.value.semester) return null
   return {
     course: {
       code: selectedCourse.value.code,
@@ -744,11 +849,14 @@ function enqueueGradeDraftSave(snapshot, version) {
 }
 
 function scheduleGradeDraftSave() {
+  window.clearTimeout(draftSaveTimer)
   const snapshot = currentGradeDraft()
-  if (!snapshot) return
+  if (!snapshot) {
+    draftSaveStatus.value = ''
+    return
+  }
   const version = ++draftSaveVersion
   draftSaveStatus.value = 'Saving draft...'
-  window.clearTimeout(draftSaveTimer)
   draftSaveTimer = window.setTimeout(() => {
     enqueueGradeDraftSave(snapshot, version)
   }, 250)
@@ -767,7 +875,7 @@ async function flushGradeDraftSave() {
 }
 
 watch(
-  [() => view.value, () => selectedCourse.value.code, () => selectedCourse.value.section, () => selectedCourse.value.semester, () => headersByPeriod.value, () => allGradeStudents],
+  [() => view.value, () => selectedCourse.value.code, () => selectedCourse.value.section, () => selectedCourse.value.semester, () => headersByPeriod.value, () => allGradeStudents, () => isSubmissionLockedByRegistrar.value],
   scheduleGradeDraftSave,
   { deep: true, flush: 'post' },
 )
@@ -1880,6 +1988,15 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
+.submit-action-btn.is-submitted,
+.submit-action-btn.is-submitted:hover {
+  border-color: #c7cdd1;
+  background: #e5e7eb;
+  color: #6b7280;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
 .grades-content {
   align-items: stretch;
   padding: 24px 18px;
@@ -2078,6 +2195,75 @@ onUnmounted(() => {
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
+}
+
+.export-choice-dialog {
+  width: min(420px, calc(100% - 32px));
+  padding: 22px 22px 20px;
+  border: 1px solid #8b9d91;
+  border-radius: 12px;
+  background: repeating-linear-gradient(135deg, #294b38 0, #294b38 14px, #2d523d 14px, #2d523d 28px);
+  box-shadow: 0 4px 14px #0005;
+  color: #fff;
+  text-align: center;
+}
+
+.export-choice-dialog h2 {
+  margin: 0 0 7px;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.export-choice-dialog p {
+  margin: 0 auto 19px;
+  color: #fff;
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.export-choice-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.export-choice-cancel {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #2b7546;
+  border-radius: 6px;
+  background: #fff;
+  color: #21663b;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.export-choice-actions button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 1px solid #2b7546;
+  border-radius: 6px;
+  background: #a9e2bd;
+  color: #174b2c;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.export-choice-actions button:hover {
+  background: #98d7ae;
+}
+
+.export-choice-cancel:hover {
+  background: #eaf8ee;
+}
+
+.export-choice-cancel {
+  min-width: 90px;
+  margin-top: 12px;
+  border-color: #bbb;
+  color: #222;
 }
 
 .export-excel-btn {
@@ -2309,5 +2495,24 @@ onUnmounted(() => {
   font-family: "Segoe UI", Arial, sans-serif;
   font-variant-numeric: lining-nums tabular-nums;
   font-feature-settings: "lnum" 1, "tnum" 1;
+}
+
+.school-year-label {
+  margin: -4px 0 10px;
+  color: #355b40;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.prof-root,
+.prof-root button,
+.prof-root input,
+.prof-root select {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.prof-root .prof-header h1,
+.prof-root .grade-table-card h2 {
+  font-family: inherit;
 }
 </style>

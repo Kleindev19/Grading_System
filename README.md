@@ -1,22 +1,22 @@
 # Grading System
 
-A Vue 3 and Laravel application for the complete Professor → Registrar → Student grade workflow. This guide covers the grading features and data flow. Account screens are outside this workflow.
+A Vue 3 and Laravel application for the complete **Professor → Registrar → Student** grading workflow. Shared access includes registration, email verification, sign-in, and sign-out. This guide summarizes role-based features, the grade lifecycle, API connection, and local setup for handoff to the Mother System integration team.
 
 ## System at a glance
 
-1. Registrar configures Midterm and Finals dates and the final-grade submission deadline for each semester.
+1. Registrar configures a school year, semester, and Submit of Grade deadline.
 2. Professor opens an assigned course, sets its assessment criteria, and enters student scores. Draft scores and assessment columns are saved so work can be resumed.
 3. Professor checks the calculated grades and submits the grade sheet for Registrar review.
-4. Registrar reviews submissions, approves complete sheets, or returns a sheet with a reason. Approved sheets are linked to a release schedule.
+4. Registrar reviews submissions, approves complete sheets, or returns a sheet with a reason. Approved sheets are scheduled for release.
 5. When the scheduled release date arrives, complete approved grades are published. Students can view their own published grades and academic summary.
 
-Dates and deadlines use Asia/Manila time. A grade period must be configured and open before professors can enter or submit that period. A future release remains scheduled; the Registrar may release it once its date arrives. Due schedules are also processed when grade schedules or published grades are requested, so this workflow does not depend on a separate cron job.
+Dates and deadlines use Asia/Manila time. A grade period must be configured and unlocked before professors can save or submit grades. Locking a period preserves its submitted grade sheets; a new period starts with a blank grade sheet and the students' roster, without deleting historical grades. A future release remains scheduled; the Registrar may release it once its date arrives. Due schedules are also processed when grade schedules or published grades are requested, so this workflow does not depend on a separate cron job.
 
 ## Features and functions
 
 ### Professor
 
-Class roster - Browse assigned courses grouped by institute and year level; search by student name or ID and filter by section or year.
+Class roster - Browse course grade sheets grouped by institute and year level; search by student name or ID and filter by section or year.
 
 Course grade sheet - Open a course and see its enrolled students, student IDs, section, and semester.
 
@@ -30,11 +30,11 @@ Automatic draft saving - Score edits and assessment-column changes are saved as 
 
 Grade calculation - See Midterm, Finals, final grade, and equivalent grade calculated from score entries and criteria.
 
-Period availability - See opening dates and lock reasons. Inputs and submissions are blocked while a period is locked, before its opening date, or after the applicable submission deadline.
+Period availability - See the selected school year and semester and whether the Registrar has locked grade submission. Inputs and submissions are blocked when submission is locked or the required grade period/deadline is unavailable.
 
-Final Grade export - Select Export to Excel to download a real .xlsx file for the selected course. It contains student IDs and names, Midterm, Finals, final grade, equivalent grade, and a filterable header row. Export is an explicit download action, not an automatic Excel file saved on every score edit.
+Excel export - Select **Midterm Grades**, **Finals Grades**, or **Final Grade** from Export to Excel. Each choice downloads a real `.xlsx` file for the selected course with student IDs, names, and the selected calculated grade data.
 
-Submit to Registrar - Review the final-grade sheet and confirm submission. The backend recalculates authoritative grade results and marks the sheet Submitted.
+Submit to Registrar - Review and confirm the final-grade sheet. The backend recalculates authoritative grade results and marks the sheet Submitted. The button then changes to Submitted and is disabled; a sheet returned by the Registrar can be corrected and resubmitted.
 
 ### Registrar
 
@@ -48,11 +48,11 @@ Grade review - Inspect a sheet's student scores, computed grades, and remarks.
 
 Approve or return - Approve only complete sheets. Return a submission to the professor with a required reason when changes are needed. A published sheet cannot be returned.
 
-Release scheduling - See approved sections awaiting release; choose school year, semester, year level, and release date; review existing schedules and status; manually release a due schedule.
+Release scheduling - See approved sections awaiting release. School year and semester come from the approved grade sheet, and year level comes from the section; set the release date, review schedule status, or manually release a due schedule.
 
-Grade period setup - Create one schedule per semester and configure Midterm opening, Finals opening, and final-grade submission deadline in stages.
+Grade period setup - Create one grade period per school-year semester and set its Submit of Grade deadline. The Registrar can edit or remove a period while it is still editable.
 
-Period controls - Mark Midterm or Finals complete to lock that stage and unlock the next setup step; reopen a completed stage when correction or resubmission is needed. Relevant date fields lock after completion.
+Period controls - Lock grade submission after its deadline. Locked periods remain viewable and historical professor grade sheets are retained; completed periods cannot be edited or deleted.
 
 Academic-year safeguards - Enforce semester and year ordering; require prior academic periods to be completed before moving forward; prevent editing or deleting completed past periods after their deadline.
 
@@ -60,9 +60,11 @@ Student repository - Search students by name or ID; filter by institute, course,
 
 Professor repository - Search and view professor records and their institute or department association.
 
+Responsive dashboard - Registrar, Professor, and Student views adapt to mobile and desktop screens.
+
 ### Student
 
-Semester selector - Choose an available semester and academic year. A term without an opening date or whose opening date is in the future is marked locked and its grades are unavailable.
+Semester selector - The dropdown shows only 1st and 2nd Semester for the current school year. It advances to the next school year when the calendar year changes; a semester without a Registrar grade period is marked unavailable.
 
 Academic summary - View General Weighted Average, enrolled-subject count, student status, and total units for the selected semester.
 
@@ -115,7 +117,7 @@ API contract - Full endpoint list, field names, response shapes, role access, an
 | /api/grade-criteria | Per-professor, course, and semester assessment criteria |
 | /api/grade-drafts | Saved score entries and assessment headers |
 | /api/grade-schedules | Registrar release schedules and due publication |
-| /api/grade-periods | Semester opening dates, deadline, completion, and reopening |
+| /api/grade-periods | Semester deadline setup, submission lock, and removal |
 | /api/students, /api/professors | Registrar repositories and professor roster data |
 | /api/published-grades | Student-scoped published grade results |
 

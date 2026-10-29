@@ -189,36 +189,9 @@ const totalUnits = ref(0)
 
 const publishedGrades = ref([])
 const gradeSchedules = ref([])
-function addSemesterOptions(periods, semesterLabel, schoolYear = '') {
-  const semesterMatch = semesterLabel.match(/(1st|2nd)\s+semester/i)
-  const yearMatch = (schoolYear || semesterLabel).match(/\d{4}\s*[-/]\s*(?:\d{4}|\d{2})/)
-  if (!semesterMatch) {
-    if (semesterLabel) periods.add(`${semesterLabel} ${schoolYear}`.trim())
-    return
-  }
-
-  const currentTerm = semesterMatch[1].toLowerCase() === '1st' ? '1st Semester' : '2nd Semester'
-  const nextTerm = currentTerm === '1st Semester' ? '2nd Semester' : '1st Semester'
-  if (!yearMatch) {
-    periods.add(`${currentTerm} ${schoolYear}`.trim())
-    periods.add(`${nextTerm} ${schoolYear}`.trim())
-    return
-  }
-
-  const year = yearMatch[0].replace(/\s+/g, '')
-  periods.add(`${currentTerm} ${year}`)
-  periods.add(`${nextTerm} ${year}`)
-}
-
 const semesterOptions = computed(() => {
-  const periods = new Set()
-  gradeSchedules.value.forEach(schedule => addSemesterOptions(periods, schedule.semester, schedule.schoolYear))
-  publishedGrades.value.forEach(sheet => {
-    if (sheet.semester) addSemesterOptions(periods, sheet.semester)
-  })
-  return periods.size
-    ? [...periods].sort((left, right) => right.localeCompare(left))
-    : [`1st Semester ${currentSystemYear.value}-${currentSystemYear.value + 1}`, `2nd Semester ${currentSystemYear.value}-${currentSystemYear.value + 1}`]
+  const schoolYear = `${currentSystemYear.value}-${currentSystemYear.value + 1}`
+  return [`1st Semester ${schoolYear}`, `2nd Semester ${schoolYear}`]
 })
 function semesterLockMessageFor(period) {
   const gradePeriod = gradeSchedules.value.find(schedule =>
@@ -649,6 +622,12 @@ function signOut(){
   gap: 9px;
   padding: 13px 11px;
   color: #4d4d4d;
+}
+
+.metric-card > div:last-child {
+  flex: 0 1 72%;
+  min-width: 0;
+  text-align: center;
 }
 
 .metric-icon {

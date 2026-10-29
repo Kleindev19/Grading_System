@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\GradeDraft;
+use App\Services\GradeSubmissionLock;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -47,6 +48,7 @@ class GradeDraftController extends Controller
             'student_records.*.scores.finals' => ['required', 'array'],
             'student_records.*.scores.finals.*' => ['nullable', 'numeric', 'min:0', 'max:100'],
         ]);
+        GradeSubmissionLock::ensureUnlocked($data['semester']);
 
         if (array_is_list($data['assessment_headers'])) {
             $headers = Validator::make(
@@ -91,6 +93,7 @@ class GradeDraftController extends Controller
             'section' => ['required', 'string', 'max:80'],
             'semester' => ['required', 'string', 'max:80'],
         ]);
+        GradeSubmissionLock::ensureUnlocked($course['semester']);
 
         GradeDraft::query()
             ->where([...$course, 'professor_id' => $user->id])
