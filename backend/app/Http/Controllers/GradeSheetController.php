@@ -120,7 +120,11 @@ class GradeSheetController extends Controller
             }
 
             $finalGrades = $termGrades['midterm'] !== null && $termGrades['finals'] !== null
-                ? $calculator->calculateFromTerms($termGrades['midterm'], $termGrades['finals'])
+                ? $calculator->calculateFromTerms(
+                    $termGrades['midterm'],
+                    $termGrades['finals'],
+                    $calculator->hasZeroScore($scores),
+                )
                 : null;
 
             return [

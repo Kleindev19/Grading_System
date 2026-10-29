@@ -89,7 +89,7 @@ Automatic refresh - The dashboard refreshes grade and schedule data periodically
 | Major Exam | 40% | 40% |
 | Total | 100% | 100% |
 
-Professors may customize weights per course and semester and create custom categories. Each period's weights must total 100%; configured maximum scores must be greater than 0 and no more than 100; entered scores must be within the configured maximum and 100. Scores within a category are averaged as percentages, then weighted to calculate that period's grade.
+Professors may customize weights per course and semester and create custom categories. Each period's weights must total 100%; configured maximum scores must be greater than 0 and no more than 100; entered scores must be from 0 through the configured maximum (up to 100). A score of 0 is valid, but any zero assessment score immediately marks the student FAILED with a 5.00 grade point. Scores within a category are averaged as percentages, then weighted to calculate that period's grade.
 
 Final grade = Midterm × 40% + Finals × 60%. The grading service derives the final grade, grade point, and pass/fail remark; grade summaries sent by a client are not the authoritative calculation.
 

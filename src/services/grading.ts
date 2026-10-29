@@ -105,6 +105,13 @@ export function calculateTermGrade(
   return Math.round((grade + Number.EPSILON) * 100) / 100
 }
 
+export function hasZeroScore(scores: Record<string, Record<string, string>>, period?: GradingPeriod): boolean {
+  const periods = period ? [period] : Object.keys(scores)
+  return periods.some(key => Object.values(scores[key] || {}).some(score =>
+    score != null && score !== '' && Number.isFinite(Number(score)) && Number(score) === 0,
+  ))
+}
+
 export function calculateRecordGrades(scores: Record<string, Record<string, string>>, headers: AssessmentHeaders, criteria?: GradingCriteria) {
   const headersFor = (period: GradingPeriod) => Array.isArray(headers) ? headers : headers[period]
   const midterm = calculateTermGrade(scores, 'midterm', headersFor('midterm'), criteria)
@@ -127,12 +134,13 @@ export function calculateRecordGrades(scores: Record<string, Record<string, stri
     { minimum: 0, gradePoint: '5.00' },
   ]
   const gradePoint = scale.find(item => roundedGrade >= item.minimum)?.gradePoint || '5.00'
+  const failedForNoOutput = hasZeroScore(scores)
 
   return {
     midterm: midterm.toFixed(2),
     finals: finals.toFixed(2),
     finalGrade: finalGrade.toFixed(2),
-    gradePoint,
-    remarks: roundedGrade >= 75 ? 'PASSED' : 'FAILED',
+    gradePoint: failedForNoOutput ? '5.00' : gradePoint,
+    remarks: !failedForNoOutput && roundedGrade >= 75 ? 'PASSED' : 'FAILED',
   }
 }

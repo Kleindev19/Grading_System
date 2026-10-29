@@ -43,7 +43,7 @@
             <div class="table-scroll" :class="{ 'final-grade-scroll': activePeriod === 'final-grade' }"><table class="grade-table" :class="{ 'final-grade-table': activePeriod === 'final-grade' }">
               <thead v-if="activePeriod === 'final-grade'"><tr><th>#</th><th>STUDENT ID</th><th class="wide">STUDENT NAME</th><th>MIDTERM ({{ FINAL_GRADE_WEIGHTS.midterm }}%)</th><th>FINALS ({{ FINAL_GRADE_WEIGHTS.finals }}%)</th><th>FINAL<br />GRADE</th><th class="equivalent-grade-heading">EQUIVALENT<br />GRADE</th></tr></thead>
               <thead v-else><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">{{ activePeriod.toUpperCase() }}</th><th v-for="group in gradeGroups" :key="group.category" class="category-heading" :colspan="Math.max(group.headers.length, 1)">{{ group.name }}</th></tr><tr><template v-for="group in gradeGroups" :key="group.category"><th v-if="!group.headers.length">-</th><th v-for="label in group.headers" :key="label" class="assessment-column-heading">{{ assessmentDisplayName(label) }}</th></template></tr></thead>
-              <tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><template v-if="activePeriod === 'final-grade'"><td>{{ displayTermGrade(student, 'midterm') }}</td><td>{{ displayTermGrade(student, 'finals') }}</td><td>{{ displayGrade(student, activePeriod) }}</td><td>{{ displayEquivalentGrade(student) }}</td></template><template v-else><td>{{ displayGrade(student, activePeriod) }}</td><template v-for="group in gradeGroups" :key="group.category"><td v-if="!group.headers.length">-</td><td v-for="label in group.headers" :key="label" class="assessment-score-cell" :data-label="assessmentDisplayName(label)"><input :value="student.scores[activeScorePeriod][label]" type="number" min="0" :max="maxScoreFor(label, activeScorePeriod)" :disabled="isGradeLocked(activeScorePeriod)" :class="{ 'score-over-max': exceedsMaxScore(student, label, activeScorePeriod) }" :aria-invalid="exceedsMaxScore(student, label, activeScorePeriod)" :title="isGradeLocked(activeScorePeriod) ? periodLockMessage(activeScorePeriod) : exceedsMaxScore(student, label, activeScorePeriod) ? `Maximum score is ${maxScoreFor(label, activeScorePeriod)}.` : undefined" @input="updateScore(student, label, activeScorePeriod, $event)" /></td></template></template></tr></tbody>
+              <tbody><tr v-for="(student, index) in gradeStudents" :key="student.id"><td>{{ index + 1 }}</td><td>{{ student.id }}</td><td class="name-cell">{{ student.name }}</td><template v-if="activePeriod === 'final-grade'"><td>{{ displayTermGrade(student, 'midterm') }}</td><td>{{ displayTermGrade(student, 'finals') }}</td><td>{{ displayGrade(student, activePeriod) }}</td><td>{{ displayEquivalentGrade(student) }}</td></template><template v-else><td>{{ displayGrade(student, activePeriod) }}</td><template v-for="group in gradeGroups" :key="group.category"><td v-if="!group.headers.length">-</td><td v-for="label in group.headers" :key="label" class="assessment-score-cell" :data-label="assessmentDisplayName(label)"><input :value="student.scores[activeScorePeriod][label]" type="number" min="0" :max="maxScoreFor(label, activeScorePeriod)" step="any" :disabled="isGradeLocked(activeScorePeriod)" :class="{ 'score-over-max': exceedsMaxScore(student, label, activeScorePeriod) }" :aria-invalid="exceedsMaxScore(student, label, activeScorePeriod)" :title="isGradeLocked(activeScorePeriod) ? periodLockMessage(activeScorePeriod) : exceedsMaxScore(student, label, activeScorePeriod) ? `Score must be between 0 and ${maxScoreFor(label, activeScorePeriod)}.` : undefined" @input="updateScore(student, label, activeScorePeriod, $event)" /></td></template></template></tr></tbody>
             </table></div>
           </section>
           <aside class="summary-box"><template v-if="activePeriod === 'final-grade'"><h2>FINAL GRADE WEIGHTS</h2><table><thead><tr><th>Grading Period</th><th>Percentage</th></tr></thead><tbody><tr><td>Midterm</td><td>{{ FINAL_GRADE_WEIGHTS.midterm }}%</td></tr><tr><td>Finals</td><td>{{ FINAL_GRADE_WEIGHTS.finals }}%</td></tr><tr class="total"><td>TOTAL</td><td>{{ FINAL_GRADE_WEIGHTS.midterm + FINAL_GRADE_WEIGHTS.finals }}%</td></tr></tbody></table></template><template v-else><h2>{{ criteriaPeriod.toUpperCase() }}</h2><table><thead><tr><th>Items</th><th>Max Score</th><th>Percentage</th></tr></thead><tbody><tr v-for="item in criteriaRows" :key="item.key"><td>{{ item.name }}</td><td>{{ item.maxScore }}</td><td>{{ item.weight }}%</td></tr><tr class="total"><td>TOTAL</td><td>-</td><td>{{ criteriaWeightTotal }}%</td></tr></tbody></table></template></aside>
@@ -63,7 +63,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
 import { getGradeCriteria, getGradeDraft, getGradeSchedules, getGradeSheets, getStudents, saveGradeCriteria, saveGradeDraft, submitGradeSheet } from '../services/dataService'
-import { assessmentCategory, assessmentCriterionKey, assessmentCriterionName, createDefaultCriteria, normalizePeriodScores, calculateRecordGrades, calculateTermGrade, FINAL_GRADE_WEIGHTS } from '../services/grading'
+import { assessmentCategory, assessmentCriterionKey, assessmentCriterionName, createDefaultCriteria, normalizePeriodScores, calculateRecordGrades, calculateTermGrade, FINAL_GRADE_WEIGHTS, hasZeroScore } from '../services/grading'
 import { parseAcademicPeriod, sameAcademicPeriod } from '../services/academicPeriod'
 import { getSystemDateString, parseSystemDate } from '../services/systemTime'
 const activeRoster = ref([])
@@ -272,7 +272,8 @@ function updateScore(student, header, period, event) {
     scoreEntryError.value = `Score must be between 0 and ${maximum}. The previous valid score was kept.`
     return
   }
-  student.scores[period][header] = value
+  input.value = String(score)
+  student.scores[period][header] = String(score)
   scoreEntryError.value = ''
 }
 
@@ -373,6 +374,9 @@ function displayGrade(student, period) {
   if (period !== 'final-grade') {
     return displayTermGrade(student, period)
   }
+  if (hasZeroScore(student.scores || { midterm: {}, finals: {} })) {
+    return 'FAILED'
+  }
   const grades = gradeResult(student)
   return grades ? grades.finalGrade : 'FAILED'
 }
@@ -382,6 +386,9 @@ function displayEquivalentGrade(student) {
 }
 
 function displayTermGrade(student, period) {
+  if (hasZeroScore(student.scores || { midterm: {}, finals: {} }, period)) {
+    return 'FAILED'
+  }
   const termGrade = calculateTermGrade(student.scores || { midterm: {}, finals: {} }, period, headersByPeriod.value[period], gradingCriteria.value)
   return termGrade === null ? 'FAILED' : `${termGrade.toFixed(2)}%`
 }

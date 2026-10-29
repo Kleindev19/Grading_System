@@ -25,6 +25,19 @@ class GradingCalculatorTest extends TestCase
         $this->assertSame('PASSED', $grades['remarks']);
     }
 
+    public function test_any_zero_assessment_score_immediately_fails_the_student(): void
+    {
+        $scores = [
+            'midterm' => ['Q1' => 0, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+            'finals' => ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+        ];
+
+        $grades = (new GradingCalculator())->calculate($scores);
+
+        $this->assertSame('5.00', $grades['gradePoint']);
+        $this->assertSame('FAILED', $grades['remarks']);
+    }
+
     #[DataProvider('gradeScaleCases')]
     public function test_it_maps_final_percentages_to_the_grade_scale(float $finalGrade, string $gradePoint, string $remarks): void
     {

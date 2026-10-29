@@ -249,7 +249,7 @@ class GradeCriteriaTest extends TestCase
             ->assertJsonValidationErrors('criteria.midterm.quiz.maxScore');
     }
 
-    public function test_grade_drafts_reject_scores_above_one_hundred(): void
+    public function test_grade_drafts_allow_zero_but_reject_scores_above_one_hundred(): void
     {
         $professor = User::factory()->create([
             'role' => 'professor',
@@ -276,10 +276,29 @@ class GradeCriteriaTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('student_records.0.scores.midterm.Q1');
 
-        $this->assertDatabaseCount('grade_drafts', 0);
+        $this->withToken($professor->api_token)
+            ->putJson('/api/grade-drafts', [
+                'code' => 'DRAFT-ZERO',
+                'section' => 'BSIT - 1A',
+                'semester' => '1st Semester',
+                'subject' => 'Draft Zero Test',
+                'units' => 3,
+                'assessment_headers' => ['Q1'],
+                'student_records' => [[
+                    'id' => 'ZERO-STUDENT',
+                    'name' => 'Zero Student',
+                    'scores' => [
+                        'midterm' => ['Q1' => 0],
+                        'finals' => ['Q1' => 100],
+                    ],
+                ]],
+            ])
+            ->assertOk();
+
+        $this->assertDatabaseCount('grade_drafts', 1);
     }
 
-    public function test_grade_submissions_reject_scores_above_one_hundred(): void
+    public function test_grade_submissions_allow_zero_and_mark_the_student_failed(): void
     {
         $professor = User::factory()->create([
             'role' => 'professor',
@@ -306,7 +325,29 @@ class GradeCriteriaTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('student_records.0.scores.midterm.Q1');
 
-        $this->assertDatabaseCount('grade_sheets', 0);
+        $zeroSubmission = $this->withToken($professor->api_token)
+            ->postJson('/api/grade-sheets', [
+                'code' => 'SHEET-ZERO',
+                'subject' => 'Submission Zero Test',
+                'section' => 'BSIT - 1A',
+                'semester' => '1st Semester',
+                'students' => 1,
+                'units' => 3,
+                'student_records' => [[
+                    'id' => 'ZERO-STUDENT',
+                    'name' => 'Zero Student',
+                    'scores' => [
+                        'midterm' => ['Q1' => 0, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+                        'finals' => ['Q1' => 100, 'L1' => 100, 'R1' => 100, 'A1' => 100, 'Mid Ex' => 100],
+                    ],
+                ]],
+            ])
+            ->assertCreated();
+
+        $this->assertSame('FAILED', $zeroSubmission->json('grade_sheet.student_records.0.remarks'));
+        $this->assertSame('5.00', $zeroSubmission->json('grade_sheet.student_records.0.gradePoint'));
+
+        $this->assertDatabaseCount('grade_sheets', 1);
     }
 
     public function test_submitted_grades_use_the_saved_weights_and_max_scores(): void

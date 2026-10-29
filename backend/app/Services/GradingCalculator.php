@@ -27,15 +27,15 @@ class GradingCalculator
     {
         $midterm = $this->calculatePeriod('midterm', $scores['midterm'] ?? []);
         $finals = $this->calculatePeriod('finals', $scores['finals'] ?? []);
-        return $this->calculateFromTerms($midterm, $finals);
+        return $this->calculateFromTerms($midterm, $finals, $this->hasZeroScore($scores));
     }
 
-    public function calculateFromTerms(float $midterm, float $finals): array
+    public function calculateFromTerms(float $midterm, float $finals, bool $hasZeroScore = false): array
     {
         $finalGrade = round(($midterm * 0.4) + ($finals * 0.6), 2);
         $roundedGrade = (int) round($finalGrade, 0, PHP_ROUND_HALF_UP);
 
-        [$gradePoint, $remarks] = match (true) {
+        [$gradePoint, $remarks] = $hasZeroScore ? [5.00, 'FAILED'] : match (true) {
             $roundedGrade >= 98 => [1.00, 'PASSED'],
             $roundedGrade >= 96 => [1.25, 'PASSED'],
             $roundedGrade >= 93 => [1.50, 'PASSED'],
@@ -56,6 +56,23 @@ class GradingCalculator
             'gradePoint' => number_format($gradePoint, 2, '.', ''),
             'remarks' => $remarks,
         ];
+    }
+
+    public function hasZeroScore(array $scores): bool
+    {
+        foreach ($scores as $periodScores) {
+            if (!is_array($periodScores)) {
+                continue;
+            }
+
+            foreach ($periodScores as $score) {
+                if ($score !== null && $score !== '' && is_numeric($score) && (float) $score === 0.0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     public function calculatePeriod(string $period, array $scores, ?array $criteria = null): float
