@@ -1494,6 +1494,8 @@ onUnmounted(() => {
 }
 
 .search-box input {
+  color-scheme: light;
+  background-color: #ffffff;
   color: #214732;
 }
 
