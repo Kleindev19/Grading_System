@@ -129,6 +129,7 @@
               </option>
             </select>
           </div>
+          <p class="published-grade-help">Select a semester to view published grades. Final Average uses Midterm (40%) and Finals (60%); Grade Point and Remarks show the result.</p>
           <p v-if="semesterLockMessage" class="semester-lock-notice" role="status"><strong>LOCKED</strong> {{ semesterLockMessage }}</p>
 
           <div class="table-responsive">
@@ -700,6 +701,16 @@ function signOut(){
   color: #000000;
   font-size: 8px;
   font-weight: 800;
+}
+
+.published-grade-help {
+  margin: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid #d5e5d9;
+  background: #f3f8f4;
+  color: #405b48;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .semester-lock-notice {

@@ -13,7 +13,7 @@
     </aside>
     <main class="prof-page">
       <header class="prof-header"><button v-if="isMobile" class="mobile-hamburger" type="button" aria-label="Open menu" @click="sidebarCollapsed = false"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" /></svg></button><h1>GRADE ENTRY</h1></header>
-      <div v-if="view === 'lists'" class="dashboard-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><section class="roster-panel"><div class="roster-heading"><h2>Student Rosters by Institute</h2><p>Browse enrolled students across all your assigned courses.</p></div><button v-for="institute in institutes" :key="institute.id" class="institute-line" :class="{ expanded: expandedInstitute === institute.id }" type="button" @click="toggleInstitute(institute.id)"><span>{{ expandedInstitute === institute.id ? '&#8964;' : '&#8250;' }}</span>{{ institute.name }}</button><template v-if="expandedInstitute"><div class="year-line"><strong>YEAR LEVEL:</strong><button v-for="year in years" :key="year" :class="{ chosen: selectedYear === year }" type="button" @click="selectedYear = year">{{ year }}</button></div><div v-for="group in visibleGroups" :key="group.name" class="course-group"><h3>{{ group.name }}</h3><div class="course-grid"><button v-for="course in group.courses" :key="`${course.code}-${course.section}-${course.semester}`" class="course-card" type="button" @click="openGrades(course)"><small>{{ course.code }}</small><strong>{{ course.section }}</strong><span>{{ course.semester }} | &#9673; {{ course.students }} Students</span></button></div></div><p v-if="visibleGroups.length === 0" class="roster-empty">No courses for {{ selectedYear }}.</p></template></section></div>
+      <div v-if="view === 'lists'" class="dashboard-content"><div class="toolbar"><label class="search-box"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" /><path d="m21 21-5-5" /></svg><input v-model="searchStudent" placeholder="Search student name or ID..." /></label><select v-model="selectedSection"><option value="all">Section &amp; Year</option><option v-for="section in sections" :key="section" :value="section">{{ section }}</option></select></div><section class="roster-panel"><div class="roster-heading"><h2>Student Rosters by Institute</h2><p>Search by student name or ID, filter by section, then expand an institute and year to choose a course and enter grades.</p></div><button v-for="institute in institutes" :key="institute.id" class="institute-line" :class="{ expanded: expandedInstitute === institute.id }" type="button" @click="toggleInstitute(institute.id)"><span>{{ expandedInstitute === institute.id ? '&#8964;' : '&#8250;' }}</span>{{ institute.name }}</button><template v-if="expandedInstitute"><div class="year-line"><strong>YEAR LEVEL:</strong><button v-for="year in years" :key="year" :class="{ chosen: selectedYear === year }" type="button" @click="selectedYear = year">{{ year }}</button></div><div v-for="group in visibleGroups" :key="group.name" class="course-group"><h3>{{ group.name }}</h3><div class="course-grid"><button v-for="course in group.courses" :key="`${course.code}-${course.section}-${course.semester}`" class="course-card" type="button" @click="openGrades(course)"><small>{{ course.code }}</small><strong>{{ course.section }}</strong><span>{{ course.semester }} | &#9673; {{ course.students }} Students</span></button></div></div><p v-if="visibleGroups.length === 0" class="roster-empty">No courses for {{ selectedYear }}.</p></template></section></div>
       <div v-else class="grades-content">
         <button class="back-link" type="button" @click="goToLists">&#8592; Return</button>
         <div class="grade-toolbar">
@@ -30,6 +30,7 @@
             </span>
           </div>
         </div>
+        <p class="professor-feature-help">Manage assessments and grading criteria here. Scores save automatically; a score of 0 means No Output and results in FAILED.</p>
         <p v-if="isSubmissionLockedByRegistrar" class="draft-save-status" role="status">The Registrar locked grade submission. Grades are read-only.</p>
         <p v-if="scoreEntryError || maxScoreError" class="criteria-error" role="alert">{{ scoreEntryError || maxScoreError }}</p>
         <div class="grade-columns">
@@ -40,6 +41,7 @@
               <span v-if="selectedSemester">| Semester: {{ selectedSemester }}</span>
             </p>
             <div class="period-tabs"><button :class="{ chosen: activePeriod === 'midterm' }" type="button" @click="openGradingPeriod('midterm')">Midterm</button><button :class="{ chosen: activePeriod === 'finals' }" type="button" @click="openGradingPeriod('finals')">Finals</button><button :class="{ chosen: activePeriod === 'final-grade' }" type="button" @click="activePeriod = 'final-grade'">Final Grade</button></div>
+            <p class="professor-feature-help period-feature-help">{{ activePeriod === 'final-grade' ? 'Final Grade = Midterm (40%) + Finals (60%). Export selected grades or submit the sheet to the Registrar.' : `Enter ${activePeriod === 'midterm' ? 'Midterm' : 'Finals'} scores. Grades use the saved criteria and assessment maximums.` }}</p>
             <div class="table-scroll" :class="{ 'final-grade-scroll': activePeriod === 'final-grade' }"><table class="grade-table" :class="{ 'final-grade-table': activePeriod === 'final-grade' }">
               <thead v-if="activePeriod === 'final-grade'"><tr><th>#</th><th>STUDENT ID</th><th class="wide">STUDENT NAME</th><th>MIDTERM ({{ FINAL_GRADE_WEIGHTS.midterm }}%)</th><th>FINALS ({{ FINAL_GRADE_WEIGHTS.finals }}%)</th><th>FINAL<br />GRADE</th><th class="equivalent-grade-heading">EQUIVALENT<br />GRADE</th></tr></thead>
               <thead v-else><tr><th rowspan="2">#</th><th rowspan="2">STUDENT ID</th><th rowspan="2" class="wide">STUDENT NAME</th><th rowspan="2">{{ activePeriod.toUpperCase() }}</th><th v-for="group in gradeGroups" :key="group.category" class="category-heading" :colspan="Math.max(group.headers.length, 1)">{{ group.name }}</th></tr><tr><template v-for="group in gradeGroups" :key="group.category"><th v-if="!group.headers.length">-</th><th v-for="label in group.headers" :key="label" class="assessment-column-heading">{{ assessmentDisplayName(label) }}</th></template></tr></thead>
@@ -1492,6 +1494,22 @@ onUnmounted(() => {
 .toolbar,
 .grade-toolbar {
   color: #365c45;
+}
+
+.professor-feature-help {
+  max-width: 1000px;
+  margin: -14px 0 18px;
+  padding: 10px 13px;
+  border-left: 3px solid #78ad85;
+  border-radius: 0 6px 6px 0;
+  background: #f3f8f4;
+  color: #405b48;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.period-feature-help {
+  margin: 0 0 12px;
 }
 
 .search-box {

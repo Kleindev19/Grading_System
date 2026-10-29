@@ -125,6 +125,7 @@
               Release &amp; Schedule
             </button>
           </div>
+          <p class="approval-workflow-help">{{ activeTab === 'approval' ? 'Review submitted grades. Approve complete sheets or return them for correction.' : 'Set release dates for approved grades; students can view them after release.' }}</p>
 
           <div v-if="activeTab === 'approval'" class="status-grid">
             <article v-for="card in summaryCards" :key="card.label" class="status-card">
@@ -172,6 +173,7 @@
                 </select>
               </div>
             </div>
+            <p class="approval-filter-help">Search by course, professor, or section; filter by submission status.</p>
 
             <section v-for="year in yearSections" :key="year.label" class="year-section" :class="{ expanded: expandedYears.includes(year.label) }">
               <button class="year-heading" type="button" @click="toggleYear(year.label)">
@@ -285,6 +287,7 @@
             <div class="period-content">
               <form class="period-form" @submit.prevent="saveGradePeriod">
                 <p class="period-form-title">&#128197; {{ editingPeriodId ? 'Edit Grade Period' : 'Set Grade Period' }}</p>
+                <p class="period-help-text">Set the school year, semester, and submission deadline. Previous-period grades are retained.</p>
                 <div class="period-fields">
                   <div class="period-control-field"><label for="school-year">School Year</label><select id="school-year" v-model="periodForm.schoolYear" :disabled="Boolean(editingPeriodId)"><option v-for="schoolYear in gradePeriodSchoolYearOptions" :key="schoolYear" :value="schoolYear" :disabled="!canCreateGradePeriodInYear(schoolYear)">{{ schoolYear }}{{ canCreateGradePeriodInYear(schoolYear) ? '' : ' (lock previous 2nd Semester after its deadline first)' }}</option></select></div>
                   <div class="period-control-field"><label for="period-semester">Semester</label><select id="period-semester" v-model="periodForm.semester" :disabled="Boolean(editingPeriodId)"><option value="Semester">Semester</option><option value="1st Semester" :disabled="!canCreateGradePeriodSemester('1st Semester')">1st Semester</option><option value="2nd Semester" :disabled="!canCreateGradePeriodSemester('2nd Semester')">2nd Semester{{ canCreateGradePeriodSemester('2nd Semester') ? '' : ' (lock 1st Semester after its deadline first)' }}</option></select></div>
@@ -294,6 +297,7 @@
               </form>
               <section class="active-schedules">
                 <h4>Active Schedules</h4>
+                <p class="period-help-text">Review period status. Locking prevents grade changes while retaining student records and grade history.</p>
                 <div v-for="period in gradePeriods" :key="period.id" class="active-schedule-row">
                   <div><strong>A.Y {{ period.schoolYear }} &nbsp;-&nbsp; {{ period.semester }}</strong><small>{{ period.submitGradeLocked ? 'Midterm and Finals are view-only for professors' : 'Midterm and Finals are open' }} &nbsp;|&nbsp; Submit of Grade Deadline: {{ period.submitGradeDeadline || '-' }}</small></div>
                   <div class="period-stage-status"><button type="button" class="complete-period-button" :class="{ 'submission-locked': period.submitGradeLocked }" :disabled="period.submitGradeLocked || !canLockGradeSubmission(period)" :title="gradeSubmissionLockTitle(period)" @click="openGradeSubmissionConfirmation(period)"><span class="lock-checkbox" :class="{ checked: period.submitGradeLocked }" aria-hidden="true"><span v-if="period.submitGradeLocked">&#10003;</span></span><span>{{ period.submitGradeLocked ? 'Locked Permanently' : 'Lock Submit of Grade' }}</span></button></div>
@@ -2587,6 +2591,17 @@ async function saveGradePeriod() {
   font-weight: 700;
 }
 
+.period-help-text {
+  margin: -6px 0 14px;
+  color: #405b48;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.active-schedules .period-help-text {
+  margin: -3px 0 12px;
+}
+
 .period-fields {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2965,6 +2980,28 @@ async function saveGradePeriod() {
   background: #ffffff;
   font-size: 16px;
   font-weight: 700;
+}
+
+.approval-filter-help {
+  margin: 0 16px 16px;
+  padding: 10px 14px;
+  border-left: 3px solid #78ad85;
+  border-radius: 0 6px 6px 0;
+  background: #f3f8f4;
+  color: #405b48;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.approval-workflow-help {
+  margin: 0 0 16px;
+  padding: 10px 14px;
+  border-left: 3px solid #78ad85;
+  border-radius: 0 6px 6px 0;
+  background: #f3f8f4;
+  color: #405b48;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .table-scroll {
