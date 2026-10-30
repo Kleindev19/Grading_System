@@ -360,22 +360,22 @@
                     </thead>
                     <tbody>
                       <tr v-for="(row, index) in gradingScaleDraft" :key="index">
-                        <td><input v-model.number="row.minimum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} minimum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
-                        <td><input v-model.number="row.maximum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} maximum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
-                        <td>
+                        <td data-label="Minimum Grade"><input v-model.number="row.minimum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} minimum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
+                        <td data-label="Maximum Grade"><input v-model.number="row.maximum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} maximum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
+                        <td data-label="Grade Point">
                           <select v-model="row.gradePoint" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} grade point`" @change="gradingScaleError = ''; gradingScaleSuccess = ''">
                             <option value="" disabled>Ex: 1.00</option>
                             <option v-if="!gradingScalePointOptions.includes(row.gradePoint)" :value="row.gradePoint" disabled>{{ row.gradePoint }}</option>
                             <option v-for="gradePoint in gradingScalePointOptions" :key="gradePoint" :value="gradePoint">{{ gradePoint }}</option>
                           </select>
                         </td>
-                        <td>
+                        <td data-label="Remarks">
                           <select v-model="row.remarks" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} remarks`" @change="gradingScaleError = ''; gradingScaleSuccess = ''">
                             <option value="" disabled>Select</option>
                             <option v-for="remark in gradingScaleRemarkOptions" :key="remark" :value="remark">{{ remark }}</option>
                           </select>
                         </td>
-                        <td><button class="grading-scale-remove-button" type="button" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Remove grading scale row ${index + 1}`" @click="removeGradingScaleRow(index)">Remove</button></td>
+                        <td data-label="Actions"><button class="grading-scale-remove-button" type="button" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Remove grading scale row ${index + 1}`" @click="removeGradingScaleRow(index)">Remove</button></td>
                       </tr>
                       <tr v-if="gradingScaleDraft.length === 0"><td colspan="5" class="empty-cell">No grading scale rows. Use + Row to create a blank row.</td></tr>
                     </tbody>
@@ -1399,6 +1399,7 @@ async function saveGradePeriod() {
   overflow: hidden;
   background: #ffffff;
   color: #000000;
+  color-scheme: light;
   font-family: Arial, Helvetica, sans-serif;
   text-align: left;
 }
@@ -2108,6 +2109,8 @@ async function saveGradePeriod() {
   border: 1px solid #b9cbbd;
   border-radius: 4px;
   background: #fff;
+  color: #202020;
+  color-scheme: light;
 }
 
 .grading-scale-upload-button {
@@ -2244,6 +2247,8 @@ async function saveGradePeriod() {
   table-layout: fixed;
   border-collapse: collapse;
   background: #fff;
+  color: #202020;
+  color-scheme: light;
   text-align: center;
 }
 
@@ -2301,7 +2306,17 @@ async function saveGradePeriod() {
   padding: 6px 8px;
   border: 1px solid #c7d1ca;
   border-radius: 4px;
+  background-color: #ffffff;
+  color: #202020;
+  color-scheme: light;
   text-align: center;
+}
+
+.grading-scale-table input:disabled,
+.grading-scale-table select:disabled {
+  background-color: #f0f3f1;
+  color: #59635c;
+  opacity: 1;
 }
 
 .grading-scale-remove-button {
@@ -4293,6 +4308,147 @@ async function saveGradePeriod() {
 
   .release-fields {
     grid-template-columns: 1fr;
+  }
+
+  .grading-scale-content {
+    padding: 14px 12px 18px;
+  }
+
+  .grading-scale-add-rows {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .grading-scale-add-rows strong {
+    grid-column: 1 / -1;
+    margin: 0;
+  }
+
+  .grading-scale-add-rows label {
+    justify-content: space-between;
+    min-width: 0;
+  }
+
+  .grading-scale-add-rows input {
+    flex: 0 0 54px;
+  }
+
+  .grading-scale-add-rows > button,
+  .grading-scale-add-rows .grading-scale-upload-button {
+    width: 100%;
+    min-height: 38px;
+  }
+
+  .grading-scale-import-help,
+  .grading-scale-note {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+
+  .grading-scale-preview-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .grading-scale-preview-heading > div:last-child {
+    flex-wrap: wrap;
+  }
+
+  .grading-scale-preview-table {
+    min-width: 480px;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) {
+    display: block;
+    width: 100%;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) thead {
+    display: none;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #d3ddd5;
+    border-radius: 6px;
+    background: #ffffff;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody tr:nth-child(even) td {
+    background: transparent;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody td {
+    display: flex;
+    width: auto !important;
+    min-width: 0;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: left;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody td::before {
+    content: attr(data-label);
+    color: #3c5544;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody td[colspan] {
+    grid-column: 1 / -1;
+    text-align: center;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody td[colspan]::before {
+    content: none;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) tbody td:nth-child(5) {
+    grid-column: 1 / -1;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) input,
+  .grading-scale-table:not(.grading-scale-preview-table) select {
+    min-height: 40px;
+    font-size: 16px;
+  }
+
+  .grading-scale-remove-button {
+    min-height: 40px;
+  }
+
+  .grading-scale-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .grading-scale-actions .grading-scale-save-button {
+    grid-column: 1 / -1;
+  }
+
+  .grading-scale-actions button {
+    min-width: 0;
+    min-height: 40px;
+    padding-inline: 8px;
+    font-size: 12px;
   }
 
   .release-panel,
