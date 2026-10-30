@@ -344,7 +344,7 @@
                       <thead><tr><th>Minimum Grade</th><th>Maximum Grade</th><th>Grade Range</th><th>Remarks</th></tr></thead>
                       <tbody>
                         <tr v-for="(row, index) in gradingScaleImportRows" :key="index">
-                          <td>{{ row.minimum }}</td><td>{{ row.maximum }}</td><td>{{ row.gradePoint }}</td><td>{{ row.remarks }}</td>
+                          <td data-label="Minimum Grade">{{ row.minimum }}</td><td data-label="Maximum Grade">{{ row.maximum }}</td><td data-label="Grade Point">{{ row.gradePoint }}</td><td data-label="Remarks">{{ row.remarks }}</td>
                         </tr>
                       </tbody>
                     </table>
@@ -2176,6 +2176,10 @@ async function saveGradePeriod() {
 }
 
 .grading-scale-import-preview {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   margin: 14px 0;
   padding: 14px;
   border: 1px solid #badcc3;
@@ -2183,26 +2187,52 @@ async function saveGradePeriod() {
   background: #f7fbf8;
 }
 
+.grading-scale-import-preview *,
+.grading-scale-import-help,
+.grading-scale-import-status,
+.grading-scale-import-error {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 .grading-scale-preview-heading {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
 }
 
+.grading-scale-preview-heading > div {
+  min-width: 0;
+}
+
+.grading-scale-preview-heading strong {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .grading-scale-preview-heading p {
   margin: 4px 0 0;
   color: #66736b;
   font-size: 12px;
+  line-height: 1.5;
 }
 
 .grading-scale-preview-heading > div:last-child {
   display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
   gap: 8px;
 }
 
 .grading-scale-preview-heading button {
+  min-width: 0;
+  max-width: 100%;
   min-height: 34px;
   padding: 6px 10px;
   border: 1px solid #477b56;
@@ -2212,6 +2242,9 @@ async function saveGradePeriod() {
   font: inherit;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: normal;
   cursor: pointer;
 }
 
@@ -2237,6 +2270,9 @@ async function saveGradePeriod() {
 }
 
 .grading-scale-table-wrap {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   overflow-x: auto;
   border: 1px solid #d3ddd5;
   border-radius: 6px;
@@ -2306,16 +2342,18 @@ async function saveGradePeriod() {
   padding: 6px 8px;
   border: 1px solid #c7d1ca;
   border-radius: 4px;
-  background-color: #ffffff;
-  color: #202020;
+  background-color: #ffffff !important;
+  color: #202020 !important;
   color-scheme: light;
+  -webkit-text-fill-color: #202020;
   text-align: center;
 }
 
 .grading-scale-table input:disabled,
 .grading-scale-table select:disabled {
-  background-color: #f0f3f1;
-  color: #59635c;
+  background-color: #f0f3f1 !important;
+  color: #59635c !important;
+  -webkit-text-fill-color: #59635c;
   opacity: 1;
 }
 
@@ -4172,6 +4210,22 @@ async function saveGradePeriod() {
     padding: 12px;
   }
 
+  .grading-scale-import-preview,
+  .grading-scale-table-wrap,
+  .grading-scale-preview-heading {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .grading-scale-preview-heading > div:first-child {
+    width: 100%;
+  }
+
+  .grading-scale-preview-heading strong {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
   .published-card {
     max-width: none;
   }
@@ -4353,11 +4407,87 @@ async function saveGradePeriod() {
   }
 
   .grading-scale-preview-heading > div:last-child {
-    flex-wrap: wrap;
+    display: grid;
+    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .grading-scale-preview-heading > div:last-child button {
+    width: 100%;
+    min-height: 42px;
+    white-space: normal;
   }
 
   .grading-scale-preview-table {
-    min-width: 480px;
+    display: block;
+    width: 100%;
+  }
+
+  .grading-scale-preview-table thead {
+    display: none;
+  }
+
+  .grading-scale-preview-table tbody {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .grading-scale-preview-table tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    padding: 10px;
+    border: 1px solid #d3ddd5;
+    border-radius: 6px;
+    background: #ffffff;
+  }
+
+  .grading-scale-preview-table tbody td {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #202020;
+    font-size: 15px;
+    text-align: left;
+  }
+
+  .grading-scale-preview-table tbody td::before {
+    content: attr(data-label);
+    color: #3c5544;
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .grading-scale-preview-heading > div:last-child button {
+    flex: none;
+    min-width: 0;
+  }
+
+  .grading-scale-add-rows {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .grading-scale-add-rows > * {
+    min-width: 0;
+  }
+
+  .grading-scale-add-rows .grading-scale-upload-button {
+    white-space: nowrap;
+  }
+
+  .grading-scale-table:not(.grading-scale-preview-table) input,
+  .grading-scale-table:not(.grading-scale-preview-table) select {
+    background-color: #ffffff !important;
+    color: #202020 !important;
+    -webkit-text-fill-color: #202020;
   }
 
   .grading-scale-table:not(.grading-scale-preview-table) {
