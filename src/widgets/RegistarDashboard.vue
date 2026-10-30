@@ -306,6 +306,90 @@
                 <p v-if="gradePeriods.length === 0" class="release-empty">No active grade period schedule.</p>
               </section>
             </div>
+
+            <section class="grading-scale-panel">
+              <div class="grading-scale-toolbar">
+                <button class="grading-scale-toggle" type="button" :aria-expanded="gradingScaleOpen" aria-controls="grading-scale-content" @click="gradingScaleOpen = !gradingScaleOpen">
+                  <span aria-hidden="true">{{ gradingScaleOpen ? '&#8722;' : '+' }}</span>
+                  Grading Scale
+                </button>
+              </div>
+
+              <div v-if="gradingScaleOpen" id="grading-scale-content" class="grading-scale-content">
+                <div class="grading-scale-add-rows">
+                  <strong>Multiple Rows</strong>
+                  <label>Add Row:
+                    <input v-model.number="gradingScaleRowCount" type="number" min="1" max="101" step="1" :disabled="gradingScaleLocked || gradingScaleSaving || gradingScaleLoading" aria-label="Number of grading scale rows to add" />
+                  </label>
+                    <button type="button" :disabled="gradingScaleLocked || gradingScaleSaving || gradingScaleLoading" @click="addGradingScaleRows">+ Row</button>
+                    <input ref="gradingScaleFileInput" class="grading-scale-file-input" type="file" accept=".xlsx,.png,.jpg,.jpeg,.jpe,.webp" :disabled="gradingScaleLocked || gradingScaleImporting || gradingScaleSaving || gradingScaleLoading" @change="handleGradingScaleUpload" />
+                    <button class="grading-scale-upload-button" type="button" :disabled="gradingScaleLocked || gradingScaleImporting || gradingScaleSaving || gradingScaleLoading" @click="gradingScaleFileInput?.click()">
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                      <path d="M8 10V2m0 0L5 5m3-3 3 3M3 9v4h10V9" />
+                    </svg>
+                    {{ gradingScaleImporting ? 'Reading...' : 'Upload' }}
+                  </button>
+                </div>
+
+                <p class="grading-scale-import-help">Upload an Excel .xlsx file or a clear PNG/JPG/JPEG/JPE/WEBP image with either Minimum Grade, Maximum Grade, Grade Range, Remarks columns or Range, Grade, Remarks columns. Columns are detected from their headers, so fixed positions and table borders are not required. Rows must cover 0 to 100. Image reading stays in this browser.</p>
+                <p v-if="gradingScaleImporting" class="grading-scale-import-status" role="status">{{ gradingScaleImportStatus }}</p>
+                <p v-if="gradingScaleImportError" class="criteria-error grading-scale-import-error" role="alert">{{ gradingScaleImportError }}</p>
+                <section v-if="gradingScaleImportRows" class="grading-scale-import-preview" aria-label="Imported grading scale preview">
+                  <div class="grading-scale-preview-heading">
+                    <div><strong>Preview: {{ gradingScaleImportFileName }}</strong><p>Check the detected rows, then apply them to the editable table.</p></div>
+                    <div><button type="button" :disabled="gradingScaleLocked" @click="applyImportedGradingScale">Apply Imported Rows</button><button type="button" :disabled="gradingScaleLocked" @click="discardImportedGradingScale">Cancel</button></div>
+                  </div>
+                  <div class="grading-scale-table-wrap">
+                    <table class="grading-scale-table grading-scale-preview-table">
+                      <thead><tr><th>Minimum Grade</th><th>Maximum Grade</th><th>Grade Range</th><th>Remarks</th></tr></thead>
+                      <tbody>
+                        <tr v-for="(row, index) in gradingScaleImportRows" :key="index">
+                          <td>{{ row.minimum }}</td><td>{{ row.maximum }}</td><td>{{ row.gradePoint }}</td><td>{{ row.remarks }}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+
+                <p class="grading-scale-note">Changes are used for new calculations and submissions. Previously saved or published grades are not recalculated automatically.</p>
+                <p v-if="gradingScaleLoading" class="release-empty" role="status">Loading grading scale...</p>
+                <div v-else class="grading-scale-table-wrap">
+                  <table class="grading-scale-table">
+                    <thead>
+                      <tr><th>Minimum Grade</th><th>Maximum Grade</th><th>Grade Range</th><th>Remarks</th><th><span class="sr-only">Actions</span></th></tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(row, index) in gradingScaleDraft" :key="index">
+                        <td><input v-model.number="row.minimum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} minimum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
+                        <td><input v-model.number="row.maximum" type="number" min="0" max="100" step="1" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} maximum grade`" @input="gradingScaleError = ''; gradingScaleSuccess = ''" /></td>
+                        <td>
+                          <select v-model="row.gradePoint" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} grade point`" @change="gradingScaleError = ''; gradingScaleSuccess = ''">
+                            <option value="" disabled>Ex: 1.00</option>
+                            <option v-if="!gradingScalePointOptions.includes(row.gradePoint)" :value="row.gradePoint" disabled>{{ row.gradePoint }}</option>
+                            <option v-for="gradePoint in gradingScalePointOptions" :key="gradePoint" :value="gradePoint">{{ gradePoint }}</option>
+                          </select>
+                        </td>
+                        <td>
+                          <select v-model="row.remarks" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Row ${index + 1} remarks`" @change="gradingScaleError = ''; gradingScaleSuccess = ''">
+                            <option value="" disabled>Select</option>
+                            <option v-for="remark in gradingScaleRemarkOptions" :key="remark" :value="remark">{{ remark }}</option>
+                          </select>
+                        </td>
+                        <td><button class="grading-scale-remove-button" type="button" :disabled="gradingScaleLocked || gradingScaleSaving" :aria-label="`Remove grading scale row ${index + 1}`" @click="removeGradingScaleRow(index)">Remove</button></td>
+                      </tr>
+                      <tr v-if="gradingScaleDraft.length === 0"><td colspan="5" class="empty-cell">No grading scale rows. Use + Row to create a blank row.</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="grading-scale-actions">
+                  <button class="grading-scale-save-button" type="button" :disabled="gradingScaleLocked || gradingScaleSaving || gradingScaleLoading" @click="saveRegistrarGradingScale">{{ gradingScaleSaving ? 'Saving...' : '+ Save Rows' }}</button>
+                  <button class="grading-scale-delete-all-button" type="button" :disabled="gradingScaleLocked || gradingScaleSaving || gradingScaleLoading || gradingScaleDraft.length === 0" @click="deleteAllGradingScaleRows">Delete All Rows</button>
+                  <button v-if="gradingScaleLocked" class="grading-scale-edit-button" type="button" :disabled="gradingScaleSaving || gradingScaleLoading" @click="editRegistrarGradingScale">Edit</button>
+                </div>
+                <p v-if="gradingScaleError" class="criteria-error" role="alert">{{ gradingScaleError }}</p>
+                <p v-if="gradingScaleSuccess" class="grading-scale-success" role="status">{{ gradingScaleSuccess }}</p>
+              </div>
+            </section>
           </div>
 
         </div>
@@ -332,6 +416,7 @@
               </div>
               <div class="repository-student-list">
                 <small>Students ({{ filteredRepositoryStudents.length }})</small>
+                <p v-if="studentsError" class="repository-empty" role="alert">{{ studentsError }}</p>
                 <template v-for="group in repositoryGroups" :key="`${group.institute}-${group.course}-${group.year}-${group.section}`">
                   <strong class="repository-group-heading">{{ group.institute }} - {{ group.course }} {{ yearNumber(group.year) }}-{{ group.section }}</strong>
                   <button v-for="student in group.students" :key="student.student_id" type="button" :class="{ selected: String(selectedRepositoryStudent?.student_id) === String(student.student_id) }" @click="selectRepositoryStudent(student)">
@@ -376,9 +461,10 @@
               <thead><tr><th>Name</th><th>Email</th><th>Institute</th><th>Department</th><th>Status</th></tr></thead>
               <tbody>
                 <tr v-for="professor in filteredProfessors" :key="professor.id">
-                  <td>{{ professor.name }}</td><td>{{ professor.email }}</td><td>{{ selectedInstitute?.short || '-' }}</td><td><span>{{ professorCourse(professor) }}</span></td><td><b>{{ professor.status === 'Pending' ? 'Active' : professor.status }}</b></td>
+                  <td>{{ professor.name }}</td><td>{{ professor.email }}</td><td>{{ professor.institute || selectedInstitute?.short || '-' }}</td><td><span>{{ professor.department || professorCourse(professor) }}</span></td><td><b>{{ professor.status }}</b></td>
                 </tr>
-                <tr v-if="filteredProfessors.length === 0"><td colspan="5" class="empty-cell">No registered professors found.</td></tr>
+                <tr v-if="professorsError"><td colspan="5" class="empty-cell" role="alert">{{ professorsError }}</td></tr>
+                <tr v-else-if="filteredProfessors.length === 0"><td colspan="5" class="empty-cell">No registered professors found.</td></tr>
               </tbody>
             </table>
           </div>
@@ -453,7 +539,7 @@
                   <td>{{ student.finals }}</td>
                   <td>{{ student.finalGrade }}</td>
                   <td><strong>{{ student.gradePoint }}</strong></td>
-                  <td><span class="passed-pill">{{ student.remarks }}</span></td>
+                  <td><span class="passed-pill" :class="remarkClass(student.remarks)">{{ student.remarks }}</span></td>
                 </tr>
               </tbody>
             </table>
@@ -485,7 +571,8 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getInstitutes, getProfessors, getStudentGrades, getStudents, lockGradeSubmission, releaseGradeSchedule, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { createGradePeriod, createGradeSchedule, deleteGradePeriod, getGradeSchedules, getGradeSheets, getGradingScaleState, getInstitutes, getProfessors, getStudentGrades, getStudents, lockGradeSubmission, releaseGradeSchedule, saveGradingScale, updateGradePeriod, updateGradeSheetStatus } from '../services/dataService'
+import { importGradingScaleFile } from '../services/gradingScaleImport'
 import { formatSystemDate, getSystemDateParts, getSystemDateString, getSystemDayStart, parseSystemDate } from '../services/systemTime'
 import { parseAcademicPeriod } from '../services/academicPeriod'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
@@ -496,6 +583,8 @@ import iteLogo from '../logo/ite-logo.png'
 const props = defineProps({ user: { type: Object, default: null } })
 defineEmits(['signout'])
 
+const gradingScalePointOptions = ['1.00', '1.25', '1.50', '1.75', '2.00', '2.25', '2.50', '2.75', '3.00', '4.00', '5.00']
+const gradingScaleRemarkOptions = ['PASSED', 'FAILED']
 const sidebarOpen = ref(false)
 const currentView = ref('institute')
 const selectedInstitute = ref(null)
@@ -503,6 +592,20 @@ const search = ref('')
 const statusFilter = ref('All Status')
 const reviewSheet = ref(null)
 const activeTab = ref('approval')
+const gradingScaleDraft = ref([])
+const gradingScaleLocked = ref(false)
+const gradingScaleLoading = ref(false)
+const gradingScaleSaving = ref(false)
+const gradingScaleError = ref('')
+const gradingScaleSuccess = ref('')
+const gradingScaleOpen = ref(true)
+const gradingScaleRowCount = ref(1)
+const gradingScaleFileInput = ref(null)
+const gradingScaleImporting = ref(false)
+const gradingScaleImportStatus = ref('')
+const gradingScaleImportError = ref('')
+const gradingScaleImportRows = ref(null)
+const gradingScaleImportFileName = ref('')
 const currentTime = ref(Date.now())
 const initialSystemYear = getSystemDateParts(currentTime.value).year
 const calendarOpen = ref(false)
@@ -581,12 +684,17 @@ const reviewHasIncompleteGrades = computed(() => reviewStudents.value.length ===
   ![student.midterm, student.finals, student.finalGrade, student.gradePoint].every(value => String(value ?? '').trim() !== ''),
 ))
 const students = ref([])
+const studentsError = ref('')
 const professors = ref([])
+const professorsError = ref('')
 const professorSearch = ref('')
 const filteredProfessors = computed(() => {
   const query = professorSearch.value.trim().toLowerCase()
   return professors.value.filter(professor => {
-    const matchesInstitute = !selectedInstitute.value || gradeSheets.value.some(sheet => sheet.professor === professor.name && instituteMatches(sheet, selectedInstitute.value))
+    const matchesInstitute = !selectedInstitute.value
+      || (professor.institute
+        ? instituteMatches(professor, selectedInstitute.value)
+        : gradeSheets.value.some(sheet => (sheet.professor_id === professor.id || sheet.professor === professor.name) && instituteMatches(sheet, selectedInstitute.value)))
     return matchesInstitute && (!query || `${professor.name} ${professor.email}`.toLowerCase().includes(query))
   })
 })
@@ -671,28 +779,191 @@ function isReleaseAvailable(schedule) {
   return schedule.releasedDate <= getSystemDateString(currentTime.value)
 }
 
+function remarkClass(remarks) {
+  const remark = String(remarks || '').trim().toUpperCase()
+  return remark === 'PASSED' ? 'passed' : remark === 'INC' ? 'incomplete' : 'failed'
+}
+
+function addGradingScaleRows() {
+  if (gradingScaleLocked.value || gradingScaleSaving.value || gradingScaleLoading.value) return
+  const count = Number(gradingScaleRowCount.value)
+  if (!Number.isInteger(count) || count < 1 || gradingScaleDraft.value.length + count > 101) {
+    gradingScaleError.value = 'Add between 1 and enough rows to keep the total at 101 or fewer.'
+    return
+  }
+
+  gradingScaleDraft.value.push(...Array.from({ length: count }, () => ({
+    minimum: '',
+    maximum: '',
+    gradePoint: '',
+    remarks: '',
+  })))
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = ''
+}
+
+function removeGradingScaleRow(index) {
+  if (gradingScaleLocked.value || gradingScaleSaving.value) return
+  gradingScaleDraft.value.splice(index, 1)
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = ''
+}
+
+function deleteAllGradingScaleRows() {
+  if (gradingScaleLocked.value || gradingScaleSaving.value || gradingScaleLoading.value) return
+  gradingScaleDraft.value = []
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = ''
+  gradingScaleImportRows.value = null
+  gradingScaleImportFileName.value = ''
+  gradingScaleImportError.value = ''
+}
+
+async function handleGradingScaleUpload(event) {
+  if (gradingScaleLocked.value || gradingScaleSaving.value || gradingScaleLoading.value) return
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  gradingScaleImporting.value = true
+  gradingScaleImportError.value = ''
+  gradingScaleImportRows.value = null
+  gradingScaleImportFileName.value = file.name
+  gradingScaleImportStatus.value = 'Checking file...'
+  try {
+    gradingScaleImportRows.value = await importGradingScaleFile(file, (message) => {
+      gradingScaleImportStatus.value = message
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unable to read the selected grading-scale file.'
+    gradingScaleImportError.value = `${file.name}: ${message}`
+  } finally {
+    gradingScaleImporting.value = false
+    gradingScaleImportStatus.value = ''
+    event.target.value = ''
+  }
+}
+
+function applyImportedGradingScale() {
+  if (gradingScaleLocked.value || !gradingScaleImportRows.value) return
+  gradingScaleDraft.value = gradingScaleImportRows.value.map(row => ({ ...row }))
+  gradingScaleImportRows.value = null
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = 'Imported rows are ready to review. Save Rows to apply the grading scale.'
+}
+
+function discardImportedGradingScale() {
+  gradingScaleImportRows.value = null
+  gradingScaleImportError.value = ''
+  gradingScaleImportFileName.value = ''
+}
+
+function editRegistrarGradingScale() {
+  gradingScaleLocked.value = false
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = ''
+}
+
+async function saveRegistrarGradingScale() {
+  if (gradingScaleLocked.value || gradingScaleSaving.value || gradingScaleLoading.value) return
+  const rows = gradingScaleDraft.value
+  if (rows.length === 0 || rows.some(row =>
+    !String(row.minimum ?? '').trim()
+      || !String(row.maximum ?? '').trim()
+      || !String(row.gradePoint ?? '').trim()
+      || !Number.isInteger(Number(row.minimum))
+      || !Number.isInteger(Number(row.maximum))
+      || Number(row.minimum) < 0
+      || Number(row.maximum) > 100
+      || Number(row.minimum) > Number(row.maximum)
+      || !Number.isFinite(Number(row.gradePoint))
+      || Number(row.gradePoint) < 1
+      || Number(row.gradePoint) > 5
+      || !gradingScalePointOptions.includes(row.gradePoint)
+      || !gradingScaleRemarkOptions.includes(row.remarks),
+  )) {
+    gradingScaleError.value = 'Complete every row with valid minimum and maximum grades, choose an available grade point, and select PASSED or FAILED.'
+    return
+  }
+
+  const ascendingRows = [...rows].sort((first, second) => Number(first.minimum) - Number(second.minimum))
+  let nextMinimum = 0
+  for (const row of ascendingRows) {
+    if (Number(row.minimum) !== nextMinimum) {
+      gradingScaleError.value = 'Grade ranges must be valid, non-overlapping, and cover every grade from 0 to 100.'
+      return
+    }
+    nextMinimum = Number(row.maximum) + 1
+  }
+  if (nextMinimum !== 101) {
+    gradingScaleError.value = 'The grading scale must cover every grade from 0 to 100.'
+    return
+  }
+
+  gradingScaleSaving.value = true
+  gradingScaleError.value = ''
+  gradingScaleSuccess.value = ''
+  try {
+    gradingScaleDraft.value = await saveGradingScale(rows)
+    gradingScaleImportRows.value = null
+    gradingScaleImportFileName.value = ''
+    gradingScaleLocked.value = true
+    gradingScaleSuccess.value = 'Grading scale saved successfully.'
+  } catch (error) {
+    gradingScaleError.value = error instanceof Error ? error.message : 'Unable to save the grading scale.'
+  } finally {
+    gradingScaleSaving.value = false
+  }
+}
+
 let releaseClock
 let dataRefreshTimer
 
 async function refreshRegistrarData() {
-  const [gradeSheetsResult, studentsResult, schedulesResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules()])
+  const [gradeSheetsResult, studentsResult, schedulesResult, professorsResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules(), getProfessors()])
   if (gradeSheetsResult.status === 'fulfilled') {
     gradeSheets.value = gradeSheetsResult.value
     if (reviewSheet.value?.id) {
       reviewSheet.value = gradeSheetsResult.value.find(sheet => sheet.id === reviewSheet.value.id) || reviewSheet.value
     }
   }
-  if (studentsResult.status === 'fulfilled') students.value = studentsResult.value
+  if (studentsResult.status === 'fulfilled') {
+    students.value = studentsResult.value
+    studentsError.value = ''
+  } else {
+    studentsError.value = studentsResult.reason instanceof Error ? studentsResult.reason.message : 'Unable to load students.'
+  }
   if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
+  if (professorsResult.status === 'fulfilled') {
+    professors.value = professorsResult.value
+    professorsError.value = ''
+  } else {
+    professorsError.value = professorsResult.reason instanceof Error ? professorsResult.reason.message : 'Unable to load professors.'
+  }
 }
 
 onMounted(async () => {
   releaseClock = window.setInterval(() => { currentTime.value = Date.now() }, 30000)
-  const [gradeSheetsResult, studentsResult, schedulesResult, professorsResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules(), getProfessors()])
+  gradingScaleLoading.value = true
+  const [gradeSheetsResult, studentsResult, schedulesResult, professorsResult, gradingScaleResult] = await Promise.allSettled([getGradeSheets(), getStudents(), getGradeSchedules(), getProfessors(), getGradingScaleState()])
   if (gradeSheetsResult.status === 'fulfilled') gradeSheets.value = gradeSheetsResult.value
-  if (studentsResult.status === 'fulfilled') students.value = studentsResult.value
+  if (studentsResult.status === 'fulfilled') {
+    students.value = studentsResult.value
+  } else {
+    studentsError.value = studentsResult.reason instanceof Error ? studentsResult.reason.message : 'Unable to load students.'
+  }
   if (schedulesResult.status === 'fulfilled') schedules.value = schedulesResult.value
-  if (professorsResult.status === 'fulfilled') professors.value = professorsResult.value
+  if (professorsResult.status === 'fulfilled') {
+    professors.value = professorsResult.value
+  } else {
+    professorsError.value = professorsResult.reason instanceof Error ? professorsResult.reason.message : 'Unable to load professors.'
+  }
+  if (gradingScaleResult.status === 'fulfilled') {
+    gradingScaleDraft.value = gradingScaleResult.value.rows.map(row => ({ ...row }))
+    gradingScaleLocked.value = gradingScaleResult.value.isSaved
+  } else {
+    gradingScaleError.value = gradingScaleResult.reason instanceof Error ? gradingScaleResult.reason.message : 'Unable to load the grading scale.'
+  }
+  gradingScaleLoading.value = false
   dataRefreshTimer = window.setInterval(() => { void refreshRegistrarData() }, 5000)
 })
 
@@ -838,7 +1109,7 @@ function openProfessorRepository() {
 }
 
 function professorCourse(professor) {
-  const sheet = gradeSheets.value.find(item => item.professor === professor.name && (!selectedInstitute.value || instituteMatches(item, selectedInstitute.value)))
+  const sheet = gradeSheets.value.find(item => (item.professor_id === professor.id || item.professor === professor.name) && (!selectedInstitute.value || instituteMatches(item, selectedInstitute.value)))
   return sheet?.code || 'No course yet'
 }
 
@@ -1659,7 +1930,7 @@ async function saveGradePeriod() {
 
 .tabs-row {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   min-height: 81px;
   border-bottom: 1px solid #bdbdbd;
 }
@@ -1675,7 +1946,7 @@ async function saveGradePeriod() {
   color: #000000;
   font-size: 25px;
   font-weight: 500;
-  cursor: default;
+  cursor: pointer;
 }
 
 .tab-button:last-child {
@@ -1696,6 +1967,369 @@ async function saveGradePeriod() {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.grading-scale-panel {
+  margin: 18px 4px 20px;
+}
+
+.grading-scale-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 6px 10px;
+  border: 1px solid #d5d9d6;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.grading-scale-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: #202820;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grading-scale-toggle span {
+  color: #5a625d;
+  font-size: 18px;
+}
+
+.grading-scale-content {
+  padding: 18px 20px 22px;
+  border: 1px solid #d5d9d6;
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: #fff;
+}
+
+.grading-scale-note {
+  margin: 0 0 12px;
+  color: #66736b;
+  font-size: 13px;
+}
+
+.grading-scale-add-rows button,
+.grading-scale-save-button,
+.grading-scale-edit-button {
+  min-height: 34px;
+  padding: 7px 13px;
+  border: 1px solid #477b56;
+  border-radius: 5px;
+  background: #fff;
+  color: #245c38;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grading-scale-add-rows button:hover {
+  background: #e5f7e9;
+}
+
+.grading-scale-edit-button:hover:not(:disabled) {
+  background: #e5f7e9;
+}
+
+.grading-scale-edit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.grading-scale-delete-all-button {
+  min-height: 34px;
+  padding: 7px 13px;
+  border-color: #e8b3b0;
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 5px;
+  background: #fff;
+  color: #a53d36;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grading-scale-delete-all-button:hover:not(:disabled) {
+  background: #fff1f0;
+}
+
+.grading-scale-delete-all-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.grading-scale-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.grading-scale-add-rows {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+  padding: 12px 14px;
+  border: 1px solid #badcc3;
+  border-radius: 6px;
+  background: #e2f6e8;
+}
+
+.grading-scale-add-rows strong {
+  margin-right: auto;
+}
+
+.grading-scale-add-rows label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.grading-scale-add-rows input {
+  width: 58px;
+  height: 30px;
+  padding: 4px 6px;
+  border: 1px solid #b9cbbd;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.grading-scale-upload-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 2px 8px;
+  border: 1px solid #c8ceca;
+  border-radius: 4px;
+  background: #fff;
+  color: #303632;
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.grading-scale-file-input {
+  display: none;
+}
+
+.grading-scale-upload-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.grading-scale-upload-button svg {
+  width: 11px;
+  height: 11px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.grading-scale-upload-button:hover {
+  background: #e5f7e9;
+}
+
+.grading-scale-upload-button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.grading-scale-add-rows .grading-scale-save-button {
+  border-color: #477b56;
+  background: #4c865f;
+  color: #fff;
+}
+
+.grading-scale-import-help,
+.grading-scale-import-status {
+  margin: 0 0 10px;
+  color: #66736b;
+  font-size: 12px;
+}
+
+.grading-scale-import-status {
+  color: #245c38;
+  font-weight: 700;
+}
+
+.grading-scale-import-preview {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #badcc3;
+  border-radius: 6px;
+  background: #f7fbf8;
+}
+
+.grading-scale-preview-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.grading-scale-preview-heading p {
+  margin: 4px 0 0;
+  color: #66736b;
+  font-size: 12px;
+}
+
+.grading-scale-preview-heading > div:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.grading-scale-preview-heading button {
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid #477b56;
+  border-radius: 5px;
+  background: #fff;
+  color: #245c38;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.grading-scale-preview-heading button:first-child {
+  background: #4c865f;
+  color: #fff;
+}
+
+.grading-scale-content > .grading-scale-save-button {
+  margin-top: 14px;
+  border-color: #477b56;
+  background: #4c865f;
+  color: #fff;
+}
+
+.grading-scale-save-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.grading-scale-note {
+  margin: 0 0 12px;
+}
+
+.grading-scale-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #d3ddd5;
+  border-radius: 6px;
+}
+
+.grading-scale-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  background: #fff;
+  text-align: center;
+}
+
+.grading-scale-table:not(.grading-scale-preview-table) th:nth-child(1),
+.grading-scale-table:not(.grading-scale-preview-table) th:nth-child(2),
+.grading-scale-table:not(.grading-scale-preview-table) th:nth-child(3),
+.grading-scale-table:not(.grading-scale-preview-table) td:nth-child(1),
+.grading-scale-table:not(.grading-scale-preview-table) td:nth-child(2),
+.grading-scale-table:not(.grading-scale-preview-table) td:nth-child(3) {
+  width: 19%;
+}
+
+.grading-scale-table:not(.grading-scale-preview-table) th:nth-child(4),
+.grading-scale-table:not(.grading-scale-preview-table) td:nth-child(4) {
+  width: 25%;
+}
+
+.grading-scale-table:not(.grading-scale-preview-table) th:nth-child(5),
+.grading-scale-table:not(.grading-scale-preview-table) td:nth-child(5) {
+  width: 18%;
+}
+
+.grading-scale-preview-table th,
+.grading-scale-preview-table td {
+  width: 25%;
+}
+
+.grading-scale-table th,
+.grading-scale-table td {
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border-bottom: 1px solid #d8ded9;
+  vertical-align: middle;
+}
+
+.grading-scale-table th {
+  background: #c9efd3;
+  color: #173f2c;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+
+.grading-scale-table tr:nth-child(even) td {
+  background: #f7faf8;
+}
+
+.grading-scale-table input,
+.grading-scale-table select {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid #c7d1ca;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.grading-scale-remove-button {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding: 5px 8px;
+  border: 1px solid #d8a8a8;
+  border-radius: 4px;
+  background: #fff;
+  color: #a33434;
+  cursor: pointer;
+}
+
+.grading-scale-success {
+  margin: 12px 0 0;
+  color: #24633b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .status-grid {
@@ -2234,7 +2868,11 @@ async function saveGradePeriod() {
 }
 
 .release-content {
-  min-height: 350px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  align-items: start;
+  gap: 12px;
+  min-height: 0;
   padding: 16px 14px 18px;
   border: 1px solid #ababab;
   border-radius: 13px;
@@ -2253,8 +2891,8 @@ async function saveGradePeriod() {
 }
 
 .pending-schedule-list {
-  width: min(765px, 100%);
-  padding: 0 14px 12px;
+  width: 100%;
+  min-width: 0;
 }
 
 .pending-schedule-card {
@@ -2403,14 +3041,13 @@ async function saveGradePeriod() {
 }
 
 .published-card {
-  position: absolute;
+  position: static;
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: -101px 0 0 805px;
-  width: 200px;
-  height: 62px;
-  padding: 0 11px;
+  gap: 10px;
+  width: 100%;
+  min-height: 78px;
+  padding: 12px;
   border: 1px solid #bdbdbd;
   border-radius: 10px;
   background: #ffffff;
@@ -3244,6 +3881,16 @@ async function saveGradePeriod() {
   font-weight: 900;
 }
 
+.passed-pill.failed {
+  background: #f8c8c8;
+  color: #a32626;
+}
+
+.passed-pill.incomplete {
+  background: #fff0b3;
+  color: #725600;
+}
+
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -3391,6 +4038,15 @@ async function saveGradePeriod() {
   .tab-button {
     font-size: 20px;
   }
+
+  .period-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .period-control-field,
+  .period-date-field {
+    padding-top: 0;
+  }
 }
 
 @media (max-width: 820px) {
@@ -3470,7 +4126,8 @@ async function saveGradePeriod() {
 
   .published-card {
     position: static;
-    margin: 18px 0 0;
+    width: 100%;
+    margin: 0;
   }
 
   .tab-button {
@@ -3494,7 +4151,14 @@ async function saveGradePeriod() {
   }
 
   .release-content {
+    grid-template-columns: minmax(0, 1fr);
     min-height: 0;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .published-card {
+    max-width: none;
   }
 
   .active-schedule-row {
@@ -3629,6 +4293,52 @@ async function saveGradePeriod() {
 
   .release-fields {
     grid-template-columns: 1fr;
+  }
+
+  .release-panel,
+  .repository-panel {
+    margin-inline: 0;
+    padding-inline: 12px;
+  }
+
+  .release-panel h3,
+  .period-title {
+    font-size: 21px;
+    line-height: 1.2;
+  }
+
+  .pending-schedule-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pending-schedule-card > span {
+    text-align: left;
+  }
+
+  .pending-schedule-period {
+    overflow-wrap: anywhere;
+  }
+
+  .release-year-list {
+    margin-inline: 0;
+  }
+
+  .release-schedule-table {
+    padding-inline: 8px;
+  }
+
+  .release-schedule-row {
+    min-width: 850px;
+    font-size: 12px;
+  }
+
+  .release-schedule-header {
+    font-size: 12px;
+  }
+
+  .period-form,
+  .active-schedules {
+    padding: 12px;
   }
 
   .period-fields {

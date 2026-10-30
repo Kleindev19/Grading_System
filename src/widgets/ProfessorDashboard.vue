@@ -64,8 +64,8 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import colegioLogo from '../logo/The_Colegio_de_Montalban_Seal (1).png'
-import { getGradeCriteria, getGradeDraft, getGradeSchedules, getGradeSheets, getStudents, saveGradeCriteria, saveGradeDraft, submitGradeSheet } from '../services/dataService'
-import { assessmentCategory, assessmentCriterionKey, assessmentCriterionName, createDefaultCriteria, normalizePeriodScores, calculateRecordGrades, calculateTermGrade, FINAL_GRADE_WEIGHTS, hasZeroScore } from '../services/grading'
+import { getGradeCriteria, getGradeDraft, getGradeSchedules, getGradeSheets, getGradingScale, getStudents, saveGradeCriteria, saveGradeDraft, submitGradeSheet } from '../services/dataService'
+import { assessmentCategory, assessmentCriterionKey, assessmentCriterionName, createDefaultCriteria, normalizePeriodScores, calculateRecordGrades, calculateTermGrade, DEFAULT_GRADING_SCALE, FINAL_GRADE_WEIGHTS, hasZeroScore } from '../services/grading'
 import { parseAcademicPeriod, sameAcademicPeriod } from '../services/academicPeriod'
 import { getSystemDateString, parseSystemDate } from '../services/systemTime'
 const activeRoster = ref([])
@@ -93,6 +93,7 @@ const customAssessmentCategories = [
 ]
 const gradingCriteria = ref(createDefaultCriteria(defaultGradeHeaders))
 const criteriaDraft = ref(createDefaultCriteria(defaultGradeHeaders))
+const gradingScale = ref(DEFAULT_GRADING_SCALE)
 const criteriaOpen = ref(false)
 const criteriaEditing = ref(false)
 const criteriaSaving = ref(false)
@@ -369,7 +370,7 @@ async function saveCriteria() {
 }
 
 function gradeResult(student) {
-  return calculateRecordGrades(student.scores || { midterm: {}, finals: {} }, headersByPeriod.value, gradingCriteria.value)
+  return calculateRecordGrades(student.scores || { midterm: {}, finals: {} }, headersByPeriod.value, gradingCriteria.value, gradingScale.value)
 }
 
 function displayGrade(student, period) {
@@ -635,9 +636,11 @@ async function openGrades(course) {
     const savedData = await Promise.all([
       getGradeCriteria(courseIdentity),
       getGradeDraft(courseIdentity),
+      getGradingScale(),
     ])
     savedCriteria = savedData[0]
     savedDraft = savedData[1]
+    gradingScale.value = savedData[2]
   } catch (error) {
     window.alert(error instanceof Error ? error.message : 'Unable to load saved grading data.')
     return
@@ -700,6 +703,14 @@ async function submitToRegistrar(confirmed = false) {
     submissionError.value = isSubmissionLockedByRegistrar.value
       ? 'The submission is locked by the Registrar.'
       : finalGradeSubmissionDeadlineMessage.value
+    submissionConfirmOpen.value = true
+    return
+  }
+
+  try {
+    gradingScale.value = await getGradingScale()
+  } catch (error) {
+    submissionError.value = error instanceof Error ? error.message : 'Unable to load the current grading scale.'
     submissionConfirmOpen.value = true
     return
   }
@@ -1109,11 +1120,12 @@ onMounted(async () => {
   }, 60000)
 
   try {
-    const [studentsResult, schedulesResult, sheetsResult] = await Promise.allSettled([getStudents(), getGradeSchedules(), getGradeSheets()])
-    if (studentsResult.status !== 'fulfilled' || schedulesResult.status !== 'fulfilled' || sheetsResult.status !== 'fulfilled') throw new Error('Unable to load grade data.')
+    const [studentsResult, schedulesResult, sheetsResult, gradingScaleResult] = await Promise.allSettled([getStudents(), getGradeSchedules(), getGradeSheets(), getGradingScale()])
+    if (studentsResult.status !== 'fulfilled' || schedulesResult.status !== 'fulfilled' || sheetsResult.status !== 'fulfilled' || gradingScaleResult.status !== 'fulfilled') throw new Error('Unable to load grade data.')
     const students = studentsResult.value
     const schedules = schedulesResult.value
     const sheets = sheetsResult.value
+    gradingScale.value = gradingScaleResult.value
     const records = students.map(student => ({ id: student.student_id, name: student.name, institute: student.institute, course: student.course, year_level: student.year_level, section: student.section, midterm: '', finals: '', finalGrade: '', gradePoint: '', remarks: '', scores: { midterm: Object.fromEntries(gradeHeadersByPeriod.midterm.map(label => [label, ''])), finals: Object.fromEntries(gradeHeadersByPeriod.finals.map(label => [label, ''])) } }))
     originalGradeStudents.splice(0, originalGradeStudents.length, ...records.map(student => ({ ...student, scores: { ...student.scores } })))
     allGradeStudents.splice(0, allGradeStudents.length, ...records)

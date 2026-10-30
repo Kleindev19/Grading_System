@@ -83,7 +83,7 @@ class StudentController extends Controller
                 'finals' => $record->finals ?? '',
                 'finalGrade' => $record->final_grade ?? '',
                 'gradePoint' => $record->grade_point ?? '',
-                'remarks' => strtoupper(trim((string) $record->remarks)) === 'INC' ? 'FAILED' : ($record->remarks ?? ''),
+                'remarks' => $record->remarks ?? '',
             ])
             ->values();
 

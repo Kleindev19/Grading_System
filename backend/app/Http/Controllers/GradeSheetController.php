@@ -338,7 +338,7 @@ class GradeSheetController extends Controller
                 'finals' => $student->finals ?? '',
                 'finalGrade' => $student->final_grade ?? '',
                 'gradePoint' => $student->grade_point ?? '',
-                'remarks' => strtoupper(trim((string) $student->remarks)) === 'INC' ? 'FAILED' : ($student->remarks ?? ''),
+                'remarks' => $student->remarks ?? '',
                 'scores' => $student->assessment_scores ?? [],
             ])->values(),
         ];

@@ -2,10 +2,13 @@
 
 namespace App\Services;
 
+use App\Models\GradingScale;
 use InvalidArgumentException;
 
 class GradingCalculator
 {
+    private ?array $gradingScaleRows = null;
+
     private const WEIGHTS = [
         'midterm' => [
             'quiz' => 15,
@@ -35,19 +38,17 @@ class GradingCalculator
         $finalGrade = round(($midterm * 0.4) + ($finals * 0.6), 2);
         $roundedGrade = (int) round($finalGrade, 0, PHP_ROUND_HALF_UP);
 
-        [$gradePoint, $remarks] = $hasZeroScore ? [5.00, 'FAILED'] : match (true) {
-            $roundedGrade >= 98 => [1.00, 'PASSED'],
-            $roundedGrade >= 96 => [1.25, 'PASSED'],
-            $roundedGrade >= 93 => [1.50, 'PASSED'],
-            $roundedGrade >= 90 => [1.75, 'PASSED'],
-            $roundedGrade >= 87 => [2.00, 'PASSED'],
-            $roundedGrade >= 84 => [2.25, 'PASSED'],
-            $roundedGrade >= 81 => [2.50, 'PASSED'],
-            $roundedGrade >= 78 => [2.75, 'PASSED'],
-            $roundedGrade >= 75 => [3.00, 'PASSED'],
-            $roundedGrade >= 70 => [4.00, 'FAILED'],
-            default => [5.00, 'FAILED'],
-        };
+        $this->gradingScaleRows ??= GradingScale::currentRows();
+        $gradeRow = collect($this->gradingScaleRows)->first(
+            fn (array $row): bool => $roundedGrade >= $row['minimum'] && $roundedGrade <= $row['maximum'],
+        );
+        if (!$gradeRow) {
+            throw new InvalidArgumentException('The saved grading scale does not cover the calculated final grade.');
+        }
+
+        [$gradePoint, $remarks] = $hasZeroScore
+            ? [5.00, 'FAILED']
+            : [(float) $gradeRow['gradePoint'], $gradeRow['remarks']];
 
         return [
             'midterm' => number_format($midterm, 2, '.', ''),

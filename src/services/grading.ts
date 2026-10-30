@@ -12,6 +12,26 @@ export interface AssessmentCriterion {
   maxScore: number
 }
 export type GradingCriteria = Record<GradingPeriod, Record<string, AssessmentCriterion>>
+export interface GradingScaleRow {
+  minimum: number
+  maximum: number
+  gradePoint: string
+  remarks: string
+}
+
+export const DEFAULT_GRADING_SCALE: GradingScaleRow[] = [
+  { minimum: 98, maximum: 100, gradePoint: '1.00', remarks: 'PASSED' },
+  { minimum: 96, maximum: 97, gradePoint: '1.25', remarks: 'PASSED' },
+  { minimum: 93, maximum: 95, gradePoint: '1.50', remarks: 'PASSED' },
+  { minimum: 90, maximum: 92, gradePoint: '1.75', remarks: 'PASSED' },
+  { minimum: 87, maximum: 89, gradePoint: '2.00', remarks: 'PASSED' },
+  { minimum: 84, maximum: 86, gradePoint: '2.25', remarks: 'PASSED' },
+  { minimum: 81, maximum: 83, gradePoint: '2.50', remarks: 'PASSED' },
+  { minimum: 78, maximum: 80, gradePoint: '2.75', remarks: 'PASSED' },
+  { minimum: 75, maximum: 77, gradePoint: '3.00', remarks: 'PASSED' },
+  { minimum: 70, maximum: 74, gradePoint: '4.00', remarks: 'FAILED' },
+  { minimum: 0, maximum: 69, gradePoint: '5.00', remarks: 'FAILED' },
+]
 
 const CATEGORY_PREFIXES: Record<string, string> = {
   quiz: 'Q',
@@ -112,7 +132,12 @@ export function hasZeroScore(scores: Record<string, Record<string, string>>, per
   ))
 }
 
-export function calculateRecordGrades(scores: Record<string, Record<string, string>>, headers: AssessmentHeaders, criteria?: GradingCriteria) {
+export function calculateRecordGrades(
+  scores: Record<string, Record<string, string>>,
+  headers: AssessmentHeaders,
+  criteria?: GradingCriteria,
+  gradingScale: GradingScaleRow[] = DEFAULT_GRADING_SCALE,
+) {
   const headersFor = (period: GradingPeriod) => Array.isArray(headers) ? headers : headers[period]
   const midterm = calculateTermGrade(scores, 'midterm', headersFor('midterm'), criteria)
   const finals = calculateTermGrade(scores, 'finals', headersFor('finals'), criteria)
@@ -120,27 +145,15 @@ export function calculateRecordGrades(scores: Record<string, Record<string, stri
 
   const finalGrade = Math.round(((midterm * FINAL_GRADE_WEIGHTS.midterm / 100 + finals * FINAL_GRADE_WEIGHTS.finals / 100) + Number.EPSILON) * 100) / 100
   const roundedGrade = Math.floor(finalGrade + 0.5)
-  const scale = [
-    { minimum: 98, gradePoint: '1.00' },
-    { minimum: 96, gradePoint: '1.25' },
-    { minimum: 93, gradePoint: '1.50' },
-    { minimum: 90, gradePoint: '1.75' },
-    { minimum: 87, gradePoint: '2.00' },
-    { minimum: 84, gradePoint: '2.25' },
-    { minimum: 81, gradePoint: '2.50' },
-    { minimum: 78, gradePoint: '2.75' },
-    { minimum: 75, gradePoint: '3.00' },
-    { minimum: 70, gradePoint: '4.00' },
-    { minimum: 0, gradePoint: '5.00' },
-  ]
-  const gradePoint = scale.find(item => roundedGrade >= item.minimum)?.gradePoint || '5.00'
+  const gradeRow = gradingScale.find(row => roundedGrade >= row.minimum && roundedGrade <= row.maximum)
+  if (!gradeRow) return null
   const failedForNoOutput = hasZeroScore(scores)
 
   return {
     midterm: midterm.toFixed(2),
     finals: finals.toFixed(2),
     finalGrade: finalGrade.toFixed(2),
-    gradePoint: failedForNoOutput ? '5.00' : gradePoint,
-    remarks: !failedForNoOutput && roundedGrade >= 75 ? 'PASSED' : 'FAILED',
+    gradePoint: failedForNoOutput ? '5.00' : gradeRow.gradePoint,
+    remarks: failedForNoOutput ? 'FAILED' : gradeRow.remarks,
   }
 }

@@ -93,7 +93,7 @@ class DemoAccountsSeederTest extends TestCase
             'finals' => '86',
             'final_grade' => '84.40',
             'grade_point' => '2.25',
-            'remarks' => 'PASSED',
+            'remarks' => 'INC',
         ]);
 
         $this->withToken($token)
@@ -104,7 +104,34 @@ class DemoAccountsSeederTest extends TestCase
             ->assertJsonPath('grades.0.midterm', '82')
             ->assertJsonPath('grades.0.finals', '86')
             ->assertJsonPath('grades.0.finalGrade', '84.40')
-            ->assertJsonPath('grades.0.gradePoint', '2.25');
+            ->assertJsonPath('grades.0.gradePoint', '2.25')
+            ->assertJsonPath('grades.0.remarks', 'INC');
+    }
+
+    public function test_registrar_repository_endpoints_return_roster_and_professor_statuses(): void
+    {
+        $this->seed(DemoAccountsSeeder::class);
+
+        $registrar = User::where('username', 'mock.registrar')->firstOrFail();
+        $pendingProfessor = User::factory()->create([
+            'role' => 'professor',
+            'username' => 'pending.professor',
+        ]);
+        $pendingProfessor->forceFill(['email_verified_at' => null])->save();
+        $token = $this->postJson('/api/login', [
+            'username' => $registrar->username,
+            'password' => 'Password123!',
+        ])->assertOk()->json('token');
+
+        $this->withToken($token)
+            ->getJson('/api/students')
+            ->assertOk()
+            ->assertJsonFragment(['student_id' => '23-00001', 'name' => 'Mock Student', 'institute' => 'IBE']);
+
+        $this->withToken($token)
+            ->getJson('/api/professors')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $pendingProfessor->id, 'name' => $pendingProfessor->name, 'status' => 'Pending']);
     }
 
     public function test_registrar_student_grade_lookup_supports_grade_records_keyed_by_student_username(): void

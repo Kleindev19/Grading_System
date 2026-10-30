@@ -129,7 +129,7 @@
               </option>
             </select>
           </div>
-          <p class="published-grade-help">Select a semester to view published grades. Final Average uses Midterm (40%) and Finals (60%); Grade Point and Remarks show the result.</p>
+          
           <p v-if="semesterLockMessage" class="semester-lock-notice" role="status"><strong>LOCKED</strong> {{ semesterLockMessage }}</p>
 
           <div class="table-responsive">
@@ -156,7 +156,7 @@
                   <td data-label="FINAL AVERAGE">{{ p.student_records?.[0]?.finalGrade || '-' }}</td>
                   <td class="grade-point" data-label="GRADE POINT">{{ p.student_records?.[0]?.gradePoint || '-' }}</td>
                   <td data-label="REMARKS">
-                    <span class="pill passed">{{ p.student_records?.[0]?.remarks || 'Published' }}</span>
+                    <span class="pill" :class="remarkPillClass(p.student_records?.[0]?.remarks)">{{ p.student_records?.[0]?.remarks || 'Published' }}</span>
                   </td>
                 </tr>
               </tbody>
@@ -220,6 +220,11 @@ function courseKey(course) {
   return String(course || '').replace(/^sheet:/i, '').trim().toLowerCase()
 }
 
+function remarkPillClass(remarks) {
+  const remark = String(remarks || '').trim().toUpperCase()
+  return remark === 'PASSED' ? 'passed' : remark === 'INC' ? 'incomplete' : 'failed'
+}
+
 function updateAcademicSummary() {
   if (isSemesterLocked.value) {
     const expectedCourses = new Set(gradeSchedules.value
@@ -254,9 +259,7 @@ function updateAcademicSummary() {
     ))
   const allGradesPassed = allGradesComplete && completedGrades.every(sheet => {
     const record = sheet.student_records?.[0]
-    return Number(record?.gradePoint) > 0
-      && Number(record?.gradePoint) <= 3
-      && String(record?.remarks || '').toUpperCase() === 'PASSED'
+    return String(record?.remarks || '').trim().toUpperCase() === 'PASSED'
   })
   const gradeRows = completedGrades.map(sheet => ({
     point: Number(sheet.student_records?.[0]?.gradePoint),
@@ -837,6 +840,11 @@ function signOut(){
 .pill.failed {
   background: #f8c8c8;
   color: #a32626;
+}
+
+.pill.incomplete {
+  background: #fff0b3;
+  color: #725600;
 }
 
 @media (max-width: 860px) {

@@ -109,7 +109,7 @@ class GradeReleaseVisibilityTest extends TestCase
 
         $this->assertNotEmpty($studentPayload['grade_sheets']);
         $this->assertSame('IT101', $studentPayload['grade_sheets'][0]['code']);
-        $this->assertSame('FAILED', $studentPayload['grade_sheets'][0]['student_records'][0]['remarks']);
+        $this->assertSame('INC', $studentPayload['grade_sheets'][0]['student_records'][0]['remarks']);
     }
 
     public function test_professor_cannot_submit_incomplete_grades(): void

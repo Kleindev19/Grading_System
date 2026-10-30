@@ -1,4 +1,4 @@
-import type { GradingCriteria } from './grading'
+import type { GradingCriteria, GradingScaleRow } from './grading'
 
 export interface Subject {
   code: string
@@ -107,7 +107,26 @@ export interface Professor {
   name: string
   email: string
   username: string
+  institute?: string
+  department?: string
   status: 'Active' | 'Pending'
+}
+
+export async function getGradingScale(): Promise<GradingScaleRow[]> {
+  const payload = await getGradingScaleState()
+  return payload.rows
+}
+
+export async function getGradingScaleState(): Promise<{ rows: GradingScaleRow[]; isSaved: boolean }> {
+  return apiRequest<{ rows: GradingScaleRow[]; isSaved: boolean }>('/grading-scale')
+}
+
+export async function saveGradingScale(rows: GradingScaleRow[]): Promise<GradingScaleRow[]> {
+  const payload = await apiRequest<{ rows: GradingScaleRow[] }>('/grading-scale', {
+    method: 'PUT',
+    body: JSON.stringify({ rows }),
+  })
+  return payload.rows
 }
 
 // Centralized data provider functions — replace inline mock data with function-based sources

@@ -4,11 +4,14 @@ namespace Tests\Unit;
 
 use App\Services\GradingCalculator;
 use InvalidArgumentException;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GradingCalculatorTest extends TestCase
 {
+    use RefreshDatabase;
+
     public function test_it_applies_period_weights_and_the_40_60_final_composition(): void
     {
         $scores = [

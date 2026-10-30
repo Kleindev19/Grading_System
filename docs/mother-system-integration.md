@@ -2,7 +2,7 @@
 
 ## Status and boundary
 
-The grading application currently uses its Laravel JSON API. It does **not** call the Mother System or synchronize with its database. The Mother System API schema, authentication protocol, and deployment URL have not been provided, so the external connection is an integration-team task.
+For development and testing, the grading application currently uses its Laravel JSON API with local mock/demo accounts and records. It does **not** call the Mother System or synchronize with its database. The Mother System API schema, authentication protocol, and deployment URL have not been provided; its connection and data mapping will be handled separately by the integration team. The current mock data exercises the same API endpoints and response shapes described below.
 
 Build or configure a server-side adapter at the boundary. Keep Mother System field names and credentials behind that adapter; the Vue app must continue using the API shapes below. The adapter must preserve role authorization and the grading API's calculated grades and release rules.
 
@@ -49,6 +49,17 @@ These are the app's local auth endpoints, separate from the grading workflow. If
 
 Grade-sheet metadata includes `id`, `code`, `subject`, `section`, `semester`, `students`, `units`, `submitted`, `status`, `professor`, `professor_id`, `reviewed_by`, `reviewed_at`, and `rejection_reason`.
 
+### Registrar grading scale
+
+| Method and path | Access | Request and response |
+| --- | --- | --- |
+| `GET /grading-scale` | Professor, Registrar | Returns `{ rows: [...] }` with `minimum`, `maximum`, `gradePoint`, and `remarks`. Returns the built-in grading scale until a Registrar saves a custom one. |
+| `PUT /grading-scale` | Registrar | Submit `{ rows: [...] }`. Each row has inclusive integer grade bounds from 0 to 100, a grade point from 1.00 to 5.00, and a remark. Ranges must be non-overlapping and cover every integer grade from 0 through 100. Returns the saved rows. |
+
+The Registrar manages the scale below Grade Period Setting in Release & Schedule. Manual grade points are selected from 1.00–3.00, 4.00, or 5.00; grading-scale remarks are limited to `PASSED` or `FAILED`. The interface supports uploads of one `.xlsx` workbook or PNG/JPG/JPEG/JPE/WEBP image. The importer detects columns from their headers without relying on fixed positions or table borders. Four-column images/workbooks read `Minimum Grade` and `Maximum Grade` independently, followed by `Grade Range` and `Remarks`; the three-column `Range`, `Grade`, `Remarks` layout is also supported. Workbook/image rows must form a complete, non-overlapping 0–100 partition. Uploads are previewed before being applied to the editable table; the Registrar must still save the reviewed rows to update `/grading-scale`. Image OCR runs in the browser and the image is not sent to Laravel. Low-quality or ambiguous images are rejected rather than saved with guessed values. Previously published grade records are not changed by the grading-scale remark options.
+
+The saved scale is read by Professor previews and used by backend calculations on new submissions/recalculations. Existing grade records are not automatically recalculated when the scale changes. An assessment score of zero retains the existing no-output override of 5.00/`FAILED`, independent of the configured scale.
+
 ### Professor criteria and drafts
 
 `code`, `section`, and `semester` identify the professor's course configuration. Send them as query parameters for GET/DELETE and JSON fields for PUT.
@@ -65,9 +76,9 @@ Grade-sheet metadata includes `id`, `code`, `subject`, `section`, `semester`, `s
 
 | Method and path | Access | Request and response |
 | --- | --- | --- |
-| `GET /students` | Professor, Registrar | Returns `{ students: [...] }`, with `student_id`, `name`, `institute`, `course`, `year_level`, `section`, and `status`. |
+| `GET /students` | Professor, Registrar | Returns `{ students: [...] }` from the current local app data, with stable `student_id`, `name`, `institute` (`ICS`, `IBE`, or `ITE`), `course`, `year_level`, `section`, and `status`. The future Mother System adapter should map its roster to this response shape. |
 | `POST /students` | Registrar | Creates a student using `student_id`, `name`, optional `institute`, `course`, `year_level`, `section`, and `status`. Returns `{ student }`. |
-| `GET /professors` | Registrar | Returns `{ professors: [...] }`, with `id`, `name`, `email`, `username`, and `status`. |
+| `GET /professors` | Registrar | Returns `{ professors: [...] }` from current local app accounts, with `id`, `name`, `email`, `username`, and `status`. Optional `institute` (`ICS`, `IBE`, or `ITE`) and `department` fields may be provided; the current mock UI can derive display labels from the selected institute and the professor's grade sheets when those fields are absent. Include professors who have not submitted a grade sheet yet. The future Mother System adapter should map its professor records to this response shape. |
 
 ### Release schedules and grading periods
 
@@ -94,4 +105,4 @@ Schedule responses use camelCase: `id`, `schoolYear`, `semester`, `yearLevel`, `
 
 ## Integration acceptance check
 
-Before connecting real accounts, verify: authentication-to-role mapping; a student identity linked to an enrolled course; professor criteria/draft save, score entry, and submission; Registrar approval or return, semester lock, and scheduled release; that a new period keeps the roster but starts blank without changing historical grades; and that only the correct student can see the published record. The app integration does not include Mother System-specific API credentials, database synchronization, or an external deployment URL until the integration team supplies them.
+Before connecting real accounts, verify: authentication-to-role mapping; a student identity linked to an enrolled course; Registrar grading-scale editing and Professor/backend use of the same saved ranges; professor criteria/draft save, score entry, and submission; Registrar approval or return, semester lock, and scheduled release; that a new period keeps the roster but starts blank without changing historical grades; and that only the correct student can see the published record. The app integration does not include Mother System-specific API credentials, database synchronization, or an external deployment URL until the integration team supplies them.

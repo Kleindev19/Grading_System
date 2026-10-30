@@ -7,6 +7,7 @@ use App\Http\Controllers\GradeDraftController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\GradeScheduleController;
 use App\Http\Controllers\ProfessorController;
+use App\Http\Controllers\GradingScaleController;
 use Illuminate\Support\Facades\Route;
 
 Route::post('/register', [AuthController::class, 'register']);
@@ -20,6 +21,8 @@ Route::middleware('auth.token')->group(function () {
     Route::post('/grade-sheets', [GradeSheetController::class, 'store']);
     Route::get('/grade-criteria', [GradeCriteriaController::class, 'show']);
     Route::put('/grade-criteria', [GradeCriteriaController::class, 'save']);
+    Route::get('/grading-scale', [GradingScaleController::class, 'show']);
+    Route::put('/grading-scale', [GradingScaleController::class, 'save']);
     Route::get('/grade-drafts', [GradeDraftController::class, 'show']);
     Route::put('/grade-drafts', [GradeDraftController::class, 'save']);
     Route::delete('/grade-drafts', [GradeDraftController::class, 'destroy']);
